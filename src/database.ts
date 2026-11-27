@@ -74,7 +74,8 @@ export function resetDatabase(path:string) {
     try {
         db.exec('PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON;');
         try {
-            const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
+            // La RAZ concerne la mémoire et l’historique, pas les scripts de la console.
+            const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'saved_scripts' ORDER BY name").all();
             // Compter avant les DELETE : les déclencheurs peuvent aussi supprimer des lignes.
             const deleted=Object.fromEntries(tables.map(row=>[String(row.name),Number(db.prepare('SELECT count(*) AS n FROM '+identifier(String(row.name))).get()!.n)]));
             for(const row of tables) db.exec('DELETE FROM '+identifier(String(row.name)));

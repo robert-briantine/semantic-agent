@@ -152,7 +152,7 @@ export function initDatabaseBrowser(onConsole, onHistory) {
         $('databaseResults').replaceChildren();
         $('databaseResults').setAttribute('aria-busy', 'false');
         $('databaseCopy').disabled = true; $('databaseRun').disabled = false;
-        $('databaseStatus').textContent = 'Toutes les tables ont été vidées.';
+        $('databaseStatus').textContent = 'Mémoire et historique de l’agent vidés. Les scripts enregistrés sont conservés.';
         $('databasePage').textContent = 'Aucun résultat';
         updatePagination();
         if (opened) refreshTables(false, true);

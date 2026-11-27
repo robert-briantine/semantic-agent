@@ -35,9 +35,9 @@ async function setup(t) {
                 if (match) { clearTimeout(timer); resolve(match[1]); }
             });
         });
-        return async (endpoint, body) => {
+        return async (endpoint, body, method = 'POST') => {
             const response = await fetch(new URL(endpoint, url), body === undefined ? {} : {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+                method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
             });
             return { status: response.status, data: await response.json() };
         };
@@ -106,11 +106,14 @@ test('Historique : les erreurs et les sorties trop volumineuses sont conservées
     assert.equal((await request('/api/agent/calls/' + tooLarge.data.callId)).data.call.httpStatus, 413);
 });
 
-test('RAZ : confirmation obligatoire, toutes les tables vidées et schéma réutilisable', async t => {
+test('RAZ : mémoire et historique vidés, scripts conservés et réutilisables', async t => {
     const { request, tables } = await setup(t);
     const code = 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryPhrase(p,"donne",["à",new Ref()],42);';
     assert.equal((await request('/api/agent/execute', { source: 'Alice donne un objet.', code, mode: 'write' })).status, 200);
-    assert.equal((await request('/api/scripts', { name: 'Test', code, mode: 'write' })).status, 201);
+    const saved = await request('/api/scripts', { name: 'Test', code, mode: 'write' });
+    assert.equal(saved.status, 201);
+    assert.equal((await request('/api/scripts', { name: 'Lecture', code: 'print(1);', mode: 'read' })).status, 201);
+    const scriptsBefore = (await request('/api/scripts')).data;
     const before = tables();
     assert.ok(before.every(table => table.rowCount > 0), JSON.stringify(before));
     for (const body of [{}, { confirm: true }, { confirm: 'raz' }]) assert.equal((await request('/api/database/reset', body)).status, 400);
@@ -118,15 +121,20 @@ test('RAZ : confirmation obligatoire, toutes les tables vidées et schéma réut
     const reset = await request('/api/database/reset', { confirm: 'RAZ' });
     assert.equal(reset.status, 200);
     assert.equal(reset.data.ok, true);
-    assert.deepEqual(reset.data.deleted, Object.fromEntries(before.map(table => [table.name, table.rowCount])));
-    assert.ok(tables().every(table => table.rowCount === 0));
+    assert.deepEqual(reset.data.deleted, Object.fromEntries(before.filter(table => table.name !== 'saved_scripts').map(table => [table.name, table.rowCount])));
+    assert.ok(tables().every(table => table.name === 'saved_scripts' ? table.rowCount === 2 : table.rowCount === 0));
     assert.deepEqual(tables().map(table => [table.name, table.sql]), before.map(table => [table.name, table.sql]));
-    assert.equal((await request('/api/scripts')).data.length, 0);
+    assert.deepEqual((await request('/api/scripts')).data, scriptsBefore);
+    assert.deepEqual((await request('/api/scripts/' + saved.data.id)).data, saved.data);
     assert.equal((await request('/api/agent/calls')).data.calls.length, 0);
-    assert.equal((await request('/api/execute', { code, mode: 'write' })).status, 200);
+    assert.equal((await request('/api/execute', { code: saved.data.code, mode: saved.data.mode })).status, 200);
     assert.equal(tables().find(table => table.name === 'agent_calls').rowCount, 0);
     assert.equal((await request('/api/agent/execute', { source: 'Affiche un.', code: 'print(1);' })).status, 200);
     assert.equal(tables().find(table => table.name === 'agent_calls').rowCount, 1);
+    const updated = await request('/api/scripts/' + saved.data.id, { name: 'Test modifié', code: 'print(2);', mode: 'read' }, 'PUT');
+    assert.equal(updated.status, 200);
+    assert.equal(updated.data.id, saved.data.id);
+    assert.equal((await request('/api/scripts')).data.length, 2);
 });
 
 test('RAZ : une erreur annule la suppression des tables déjà vidées', async t => {

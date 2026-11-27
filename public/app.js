@@ -306,7 +306,7 @@ async function run() {
 $('run').addEventListener('click',run);
 $('resetDatabase').addEventListener('click', async () => {
     if (busy || scriptsBusy) return;
-    if (!confirm('RAZ : vider toutes les tables ? Les faits, références, scripts enregistrés et l’historique de l’agent seront supprimés. Cette action est irréversible.')) return;
+    if (!confirm('RAZ : vider la mémoire et l’historique de l’agent ? Les scripts enregistrés et le code de l’éditeur seront conservés. Cette action est irréversible.')) return;
     busy = true;
     $('run').disabled = true;
     updateScriptControls();
@@ -315,16 +315,9 @@ $('resetDatabase').addEventListener('click', async () => {
         const response = await fetch('/api/database/reset', { method: 'POST', headers, body: JSON.stringify({ confirm: 'RAZ' }) });
         const data = await response.json();
         if (!response.ok || !data.ok) throw Error(data.error || 'HTTP ' + response.status);
-        ++listRequest;
-        listBusy = false;
-        activeScriptId = null;
-        scriptList = [];
-        savedScriptState = { name: '', code: '', mode: 'read' };
-        renderScriptList();
         $('clear').click();
-        scriptChanged();
         $('status').textContent = 'Base remise à zéro';
-        $('meta').textContent = 'Toutes les tables ont été vidées. Le code courant reste dans l’éditeur.';
+        $('meta').textContent = 'Mémoire et historique de l’agent vidés. Les scripts enregistrés et le code courant sont conservés.';
         window.dispatchEvent(new Event('semantic:database-reset'));
         window.dispatchEvent(new Event('semantic:memory-changed'));
     } catch (error) { $('status').textContent = 'RAZ impossible'; $('meta').textContent = error.message; }

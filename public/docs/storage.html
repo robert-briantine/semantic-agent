@@ -161,7 +161,7 @@
                 </tbody></table></div>
                 <p>Un index trie les appels par date et identifiant décroissants. L’appel est inscrit avant l’exécution et finalisé après la sortie du processus. Le journal est conservé même si une erreur annule les faits du script. Les requêtes invalides et les refus pour service occupé ne sont pas exécutés et ne créent pas de ligne.</p>
                 <p>L’onglet <a href="/#history">Historique agent</a> propose une liste paginée et le détail de chaque appel. Les API <code>GET /api/agent/calls?limit=25&amp;offset=0</code> et <code>GET /api/agent/calls/:id</code> permettent aussi sa consultation.</p>
-                <p>Le bouton <strong>RAZ</strong> vide toutes les tables après confirmation, y compris cet historique et les scripts enregistrés. Il appelle <code>POST /api/database/reset</code> avec <code>{"confirm":"RAZ"}</code>. La remise à zéro est atomique et conserve le schéma ; elle est refusée pendant une exécution. Le brouillon ouvert dans Monaco reste disponible.</p>
+                <p>Le bouton <strong>RAZ</strong> vide les tables de mémoire et cet historique après confirmation. La table <code>saved_scripts</code> est exclue : les scripts enregistrés dans l’interface web sont conservés, avec leurs identifiants, noms, codes, modes et dates. Il appelle <code>POST /api/database/reset</code> avec <code>{"confirm":"RAZ"}</code>. La remise à zéro est atomique et conserve le schéma ; elle est refusée pendant une exécution. Le script chargé, sa sélection et les modifications non enregistrées dans Monaco restent disponibles ; les scripts peuvent être rechargés, modifiés ou exécutés après la RAZ.</p>
             </section>
 
             <section aria-labelledby="encoding">
