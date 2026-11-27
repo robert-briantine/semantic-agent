@@ -78,6 +78,23 @@ L’onglet **Historique agent** (`/#history`) affiche les appels récents, avec 
 
 Le bouton **RAZ**, accessible en haut de la console, demande confirmation avant de vider les tables de mémoire (faits, références, compléments et index de valeurs) et l’historique des appels de l’agent. La table `saved_scripts` est exclue de la RAZ : les scripts enregistrés dans l’interface web conservent leur nom, leur code, leur mode et leur identifiant. L’API correspondante est `POST /api/database/reset` avec `{"confirm":"RAZ"}`. La suppression est une seule transaction ; une erreur annule l’ensemble. Le schéma et ses index sont conservés. La RAZ est refusée pendant une exécution ou une autre modification (HTTP 429). Le script chargé, sa sélection et ses modifications non enregistrées dans Monaco sont conservés ; les résultats et l’historique affichés sont effacés, et les compteurs des tables sont actualisés. Les scripts conservés peuvent être rechargés, modifiés et exécutés après la RAZ. Ajouter le bouton ne déclenche aucune suppression automatique.
 
+## Profils GitHub Copilot et Qwen Code
+
+L’agent porte le nom `semantic-agent`. Son prompt complet (`GET /api/prompt`) commence par un en-tête YAML avec `name` et `description`. Deux fichiers de démarrage utilisent ce même nom et conservent les deux modes Documents et Questions :
+
+| Client | Fichier du projet |
+|---|---|
+| GitHub Copilot, notamment dans VS Code | [.github/agents/semantic-agent.agent.md](.github/agents/semantic-agent.agent.md) |
+| Qwen Code | [.qwen/agents/semantic-agent.md](.qwen/agents/semantic-agent.md) |
+
+Ces emplacements et les métadonnées suivent les formats documentés par [GitHub Copilot](https://docs.github.com/en/copilot/reference/custom-agents-configuration), [VS Code](https://code.visualstudio.com/docs/agents/reference/custom-agent-file-reference) et [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/features/sub-agents/). Les profils laissent le client choisir son modèle et ses outils disponibles, en conservant ses permissions.
+
+Démarrer le service avec `npm start`, puis sélectionner `semantic-agent` dans les agents Copilot. Dans Qwen Code, vérifier sa présence avec `/agents manage`, puis demander par exemple « Utilise l’agent semantic-agent pour répondre à cette question… ».
+
+Chaque profil charge le prompt actuel depuis `http://127.0.0.1:3000/api/prompt` avant de traiter la demande. Pour une autre instance, fournir son adresse à l’agent ou définir `SEMANTIC_AGENT_URL` dans l’environnement du client, par exemple `https://memoire.example/agent`. Le serveur doit être joignable depuis la machine qui exécute Copilot ou Qwen ; un client exécuté dans le cloud a besoin d’une instance accessible depuis son environnement. `SEMANTIC_AGENT_URL` règle l’adresse côté client, tandis que `PUBLIC_URL` règle l’URL publique annoncée par le serveur.
+
+Les profils restent courts et chargent les instructions, la librairie et les exemples dynamiquement. Cela respecte notamment la limite de 30000 caractères des profils Copilot et évite de figer une copie des sources dans chaque configuration. Pour installer l’agent dans un autre projet, copier le fichier de démarrage dans le dossier correspondant du client. Le prompt complet téléchargeable sert de contenu de référence ; utiliser les fichiers de démarrage ci-dessus comme profils à installer.
+
 ## Architecture
 `structure-langage.ts` : types/helpers ; `runtime.ts` : compilateur SQL paramétré, stockage SQLite et hydratation ; `structure-langage-runtime.ts` : façade persistante ; `execute.ts` : interpréteur AST à liste blanche ; `server.ts` : API. Les identités sont des UUID ; comparer les IDs, pas l'identité JS après hydratation. Les programmes ne voient pas les tables. Les index SQL portent sur les prédicats et leurs arguments sérialisés. Les requêtes ne chargent pas toute la base en RAM, mais les domaines multiples peuvent encore produire des produits cartésiens ; optimiser le planificateur et mesurer sur un gros corpus. `not` = monde fermé. Comparaison structurelle exacte, sans alpha-équivalence ni inférence automatique. Pas de fusion batch ni d'index d'intervalles dans ce lot. Les getters globaux sont destinés au diagnostic, pas aux requêtes à grande échelle. Les exports mémoire globale sont des fonctions de lecture dans le runtime, et non des tableaux mutables. L'API exécute un sous-ensemble de TS (pas du code arbitraire). Le prompt permet au harnais externe de lire et traduire les documents ; aucun fournisseur LLM ni parseur PDF n'est intégré. L'agent appelle l'API depuis son propre harnais. Les transactions sont utilisées par l'API ; pour des écritures directes, utiliser transaction().
 
