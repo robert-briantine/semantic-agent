@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Documentation API — Semantic Agent</title>
+    <link rel="stylesheet" href="/assets/documentation.css">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/documentation.css">
+    <script type="module" src="/assets/documentation.js"></script>
+</head>
+<body>
+    <header>
+        <div><h1>Semantic Agent <span>Documentation</span></h1><p>Librairie pour l’agent, prompt et exemples fournis par l’API</p></div>
+        <div class="header-actions"><a class="nav-link" href="/">Console</a><div id="status" role="status">Chargement…</div></div>
+    </header>
+    <main class="documentation-main">
+        <aside class="documentation-sidebar">
+            <section class="panel">
+                <h2 class="sidebar-title">Ressources</h2>
+                <div class="document-tabs" role="tablist" aria-label="Documentation de l’API" aria-orientation="vertical">
+                    <button id="libraryTab" class="document-tab" role="tab" aria-controls="documentPanel" aria-selected="true" data-document="library">Librairie pour l’agent<small>GET /api/library</small></button>
+                    <button id="promptTab" class="document-tab" role="tab" aria-controls="documentPanel" aria-selected="false" tabindex="-1" data-document="prompt">Prompt complet de l’agent<small>GET /api/prompt</small></button>
+                    <button id="examplesTab" class="document-tab" role="tab" aria-controls="documentPanel" aria-selected="false" tabindex="-1" data-document="examples">Exemples<small>GET /api/examples</small></button>
+                </div>
+                <a class="document-tab storage-link" href="/docs/storage.html">Stockage SQLite<small>Tables et format des données</small></a>
+            </section>
+            <div class="panel"><button id="reload" type="button">Actualiser</button></div>
+        </aside>
+        <section id="documentPanel" class="panel document-panel" role="tabpanel" aria-labelledby="libraryTab" aria-busy="true">
+            <div class="heading"><h2 id="documentTitle">Librairie pour l’agent</h2><button id="copy" class="secondary" disabled>Copier</button><button id="download" class="secondary" disabled>Télécharger</button></div>
+            <p id="documentDescription" class="hint">Source TypeScript de la librairie fournie à l’agent.</p>
+            <p class="document-endpoint"><span>GET</span> <code id="documentEndpoint">/api/library</code></p>
+            <p id="documentMessage" class="document-message" role="status">Chargement du document…</p>
+            <!-- Le thème couvre aussi les menus contextuels rendus dans ce conteneur. -->
+            <div id="documentEditor" class="document-editor monaco-component" hidden></div>
+            <p id="documentMeta" class="hint" aria-live="polite">Le contenu est chargé directement depuis l’API.</p>
+        </section>
+    </main>
+    <footer>Documents en lecture seule · le contenu copié ou téléchargé correspond au texte retourné par l’API.</footer>
+</body>
+</html>
