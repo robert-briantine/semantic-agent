@@ -114,6 +114,9 @@ function saveScript(req:Request,res:Response,next:NextFunction,id?:string,clone=
         if(!script){res.status(404).json({error:'Script introuvable'});return;}
         res.status(id?200:201).json(script);
     } catch(error) {
+        if(error instanceof Error&&error.message==='Clonez cet exemple pour le modifier.') {
+            res.status(409).json({error:error.message});return;
+        }
         if(error instanceof Error&&error.message.includes('UNIQUE constraint failed: saved_scripts.name')) {
             res.status(409).json({error:'Un script porte déjà ce nom. Chargez-le pour le modifier ou choisissez un autre nom.'});return;
         }
@@ -123,6 +126,18 @@ function saveScript(req:Request,res:Response,next:NextFunction,id?:string,clone=
 app.post('/api/scripts',(req,res,next)=>saveScript(req,res,next));
 app.post('/api/scripts/clone',(req,res,next)=>saveScript(req,res,next,undefined,true));
 app.put('/api/scripts/:id',(req,res,next)=>saveScript(req,res,next,req.params.id));
+app.delete('/api/scripts/:id',(req,res,next)=>{
+    if(busy){res.status(429).json({error:'Une modification ou une exécution est déjà en cours.'});return;}
+    try {
+        if(!scripts.delete(req.params.id)){res.status(404).json({error:'Script introuvable'});return;}
+        res.json({ok:true});
+    } catch(error) {
+        if(error instanceof Error&&error.message==='Les exemples ne peuvent pas être supprimés.') {
+            res.status(403).json({error:error.message});return;
+        }
+        next(error);
+    }
+});
 function execute(req:Request,res:Response,trace:boolean) {
     const {code,mode='read',source}=req.body??{};
     if(typeof code!=='string'||code.length>60000||!['read','write'].includes(mode)){res.status(400).json({ok:false,error:'code ou mode invalide'});return;}

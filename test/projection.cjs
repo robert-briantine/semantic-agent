@@ -4,7 +4,7 @@ const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { Runtime, Ref, Phrase, select, variable, est, fait, and, exists, all, eq, compileQuery } = require('../dist/runtime');
+const { Runtime, Ref, select, variable, est, phrase, and, exists, all, eq, compileQuery } = require('../dist/runtime');
 const memory = require('../dist/structure-langage-pour-ia');
 
 function setup(t) {
@@ -29,7 +29,7 @@ test('Select : les variables inutilisées valent undefined, même avec un domain
     };
     check();
     db.addMemoryComposition('Alice', 'Nom', a); db.addMemoryComposition('Bob', 'Nom', b);
-    db.addMemoryComposition(42, 'Age', a); db.addMemoryComposition(true, 'Actif', a); db.addMemoryPhrase(a, 'dort');
+    db.addMemoryComposition(42, 'Age', a); db.addMemoryComposition(true, 'Actif', a); db.addMemoryPhrase(a, 'dormir');
     check();
     assert.doesNotMatch(compileQuery(query).sql, /primitive_values/);
     assert.deepEqual(db.query(select({ n: 'string' }, est(variable('n'), 'Nom', a))), [{ n: 'Alice' }]);
@@ -53,7 +53,7 @@ test('Select : portées des quantificateurs, masquage et variables capturées', 
     const { db } = setup(t);
     const a = new Ref(), b = new Ref();
     db.addMemoryComposition(a, 'Personne'); db.addMemoryComposition(b, 'Personne');
-    db.addMemoryPhrase(a, 'connaît', b);
+    db.addMemoryPhrase(a, 'connaître', b);
     const shadow = db.query(select({ p: 'Ref', n: 'string' }, and(
         est(variable('p'), 'Personne'), exists({ n: 'Ref' }, eq(variable('n'), variable('p')))
     )));
@@ -61,7 +61,7 @@ test('Select : portées des quantificateurs, masquage et variables capturées', 
     assert.deepEqual(db.query(select({ n: 'string' }, exists({ n: 'Ref' }, est(variable('n'), 'Personne')))), [{ n: undefined }]);
     assert.deepEqual(db.query(select({ p: 'Ref' }, and(est(variable('p'), 'Personne'), exists({ n: 'string' }, true)))), []);
     assert.equal(db.query(select({ p: 'Ref' }, and(est(variable('p'), 'Personne'), all({ n: 'string' }, false)))).length, 2);
-    const captured = db.query(select({ p: 'Ref', n: 'string' }, exists({ x: 'Ref' }, fait(variable('x'), 'connaît', variable('p')))));
+    const captured = db.query(select({ p: 'Ref', n: 'string' }, exists({ x: 'Ref' }, phrase(variable('x'), 'connaître', variable('p')))));
     assert.equal(captured.length, 1); assert.equal(captured[0].p.id, b.id); assert.equal(captured[0].n, undefined);
     db.addMemoryComposition('Alice', 'Nom', a);
     assert.deepEqual(db.query(select({ n: 'string' }, exists({ x: 'Ref' }, est(variable('n'), 'Nom', variable('x'))))), [{ n: 'Alice' }]);
@@ -70,14 +70,14 @@ test('Select : portées des quantificateurs, masquage et variables capturées', 
 test('Select : variables dans les phrases imbriquées et noms littéraux', t => {
     const { db } = setup(t);
     const a = new Ref(), b = new Ref();
-    db.addMemoryPhrase(a, 'pense', new Phrase(b, 'voit', [a]));
-    const rows = db.query(select({ p: 'Ref', n: 'string' }, fait(a, 'pense', new Phrase(variable('p'), 'voit', [a]))));
+    db.addMemoryPhrase(a, 'penser', phrase(b, 'voir', a));
+    const rows = db.query(select({ p: 'Ref', n: 'string' }, phrase(a, 'penser', phrase(variable('p'), 'voir', a))));
     assert.equal(rows.length, 1); assert.equal(rows[0].p.id, b.id); assert.equal(rows[0].n, undefined);
-    db.addMemoryPhrase(a, 'n', ['n', 'valeur']);
-    assert.deepEqual(db.query(select({ n: 'string' }, fait(a, 'n', ['n', 'valeur']))), [{ n: undefined }]);
+    db.addMemoryPhrase(a, 'nommer', ['à', 42]);
+    assert.deepEqual(db.query(select({ n: 'string' }, phrase(a, 'nommer', ['à', 42]))), [{ n: undefined }]);
     const belief = all({ n: 'Ref' }, est(variable('n'), 'Personne'));
-    db.addMemoryPhrase(a, 'pense', belief);
-    const beliefs = db.query(select({ p: 'Ref', n: 'string' }, fait(variable('p'), 'pense', belief)));
+    db.addMemoryPhrase(a, 'penser', belief);
+    const beliefs = db.query(select({ p: 'Ref', n: 'string' }, phrase(variable('p'), 'penser', belief)));
     assert.equal(beliefs.length, 1); assert.equal(beliefs[0].p.id, a.id); assert.equal(beliefs[0].n, undefined);
 });
 

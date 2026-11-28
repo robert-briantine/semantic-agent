@@ -1,5 +1,4 @@
 import * as monaco from 'monaco-editor/editor';
-import { prepareAgentExamples } from './agent-examples.cjs';
 import { initDatabaseBrowser } from './database-browser.js';
 import { initAgentHistory } from './agent-history.js';
 import { appendConsoleValue, parseConsoleValue, referenceId, resetReferenceActions, setReferenceWriteMode, initReferenceActions } from './console-values.js';
@@ -40,6 +39,12 @@ const scriptModel = monaco.editor.createModel(sample, 'typescript', monaco.Uri.p
 let last = null, busy = false;
 const headers = { 'Content-Type': 'application/json' };
 let activeScriptId = null, scriptList = [], scriptsBusy = false, listBusy = false, replacingScript = false, listRequest = 0;
+let activeScriptType = 'utilisateur';
+let scriptCatalogType = 'utilisateur';
+const scriptCatalogs = [
+    { type: 'utilisateur', tab: 'userScriptsTab', panel: 'userScriptsPanel', select: 'savedScripts', open: 'openScript', refresh: 'refreshScripts' },
+    { type: 'exemple', tab: 'exampleScriptsTab', panel: 'exampleScriptsPanel', select: 'savedExamples', open: 'openExample', refresh: 'refreshExamples' }
+];
 let savedScriptState = { name: '', code: sample, mode: 'read' };
 const scriptState = () => ({ name: $('scriptName').value.trim(), code: scriptModel.getValue(), mode: $('mode').value });
 const scriptDirty = () => {
@@ -50,47 +55,69 @@ function updateScriptControls() {
     setReferenceWriteMode($('mode').value === 'write');
     const unavailable = !editor || scriptsBusy || busy;
     $('resetDatabase').disabled = busy || scriptsBusy;
-    $('saveScript').disabled = unavailable || !$('scriptName').value.trim();
+    $('saveScript').disabled = unavailable || activeScriptType === 'exemple' || !$('scriptName').value.trim();
+    $('saveScript').title = activeScriptType === 'exemple' ? 'Clonez cet exemple pour enregistrer vos modifications.' : '';
     $('cloneScript').disabled = unavailable;
     $('newScript').disabled = unavailable;
-    $('savedScripts').disabled = unavailable || !scriptList.length;
-    $('openScript').disabled = unavailable || !$('savedScripts').value;
-    $('refreshScripts').disabled = unavailable || listBusy;
-    $('example').disabled = unavailable;
-    $('loadExamples').disabled = unavailable;
+    $('scriptName').readOnly = activeScriptType === 'exemple';
+    for (const catalog of scriptCatalogs) {
+        $(catalog.tab).disabled = unavailable;
+        $(catalog.select).disabled = unavailable || !scriptList.some(script => script.type === catalog.type);
+        $(catalog.open).disabled = unavailable || !$(catalog.select).value;
+        $(catalog.refresh).disabled = unavailable || listBusy;
+    }
+    $('deleteScript').disabled = unavailable || !scriptList.some(script => script.id === $('savedScripts').value && script.type === 'utilisateur');
 }
 function scriptChanged() {
     updateScriptControls();
     if (replacingScript) return;
-    $('scriptStatus').textContent = scriptDirty() ? 'Modifications non enregistrées.' :
+    $('scriptStatus').textContent = activeScriptType === 'exemple' ? 'Exemple : cliquez sur « Cloner » pour créer une copie modifiable.' : scriptDirty() ? 'Modifications non enregistrées.' :
         activeScriptId ? 'Toutes les modifications sont enregistrées.' : 'Donnez un nom au script pour l’enregistrer sur le serveur.';
 }
 function canReplaceScript() {
     return !scriptDirty() || confirm('Les modifications du script ne sont pas enregistrées. Les abandonner ?');
 }
-function replaceScript({ id = null, name = '', code, mode = 'read' }) {
+function replaceScript({ id = null, name = '', code, mode = 'read', type = 'utilisateur' }) {
     replacingScript = true;
     activeScriptId = id;
+    activeScriptType = type;
+    editor.updateOptions({ readOnly: type === 'exemple', domReadOnly: type === 'exemple' });
     scriptModel.setValue(code);
     $('scriptName').value = name;
     $('mode').value = mode;
     savedScriptState = scriptState();
     replacingScript = false;
     selectTab('script');
+    selectScriptCatalog(type);
     updateScriptControls();
     editor.focus();
 }
 function renderScriptList(selected = activeScriptId) {
-    const select = $('savedScripts');
-    select.replaceChildren(el('option', scriptList.length ? 'Choisir un script…' : 'Aucun script enregistré'));
-    select.firstChild.value = '';
-    scriptList.sort((a, b) => a.name.localeCompare(b.name, 'fr')).forEach(script => {
-        const option = el('option', script.name + (script.mode === 'write' ? ' · Écriture' : ''));
-        option.value = script.id;
-        select.append(option);
-    });
-    select.value = scriptList.some(script => script.id === selected) ? selected : '';
+    for (const catalog of scriptCatalogs) {
+        const select = $(catalog.select), previous = select.value;
+        const scripts = scriptList.filter(script => script.type === catalog.type).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+        const label = catalog.type === 'exemple' ? 'exemple' : 'script utilisateur';
+        select.replaceChildren(el('option', scripts.length ? `Choisir un ${label}…` : `Aucun ${label}`));
+        select.firstChild.value = '';
+        scripts.forEach(script => {
+            const option = el('option', script.name + (script.mode === 'write' ? ' · Écriture' : ''));
+            option.value = script.id;
+            select.append(option);
+        });
+        select.value = scripts.some(script => script.id === selected) ? selected : scripts.some(script => script.id === previous) ? previous : '';
+    }
     updateScriptControls();
+}
+function selectScriptCatalog(type, focus = false) {
+    scriptCatalogType = type;
+    for (const catalog of scriptCatalogs) {
+        const selected = catalog.type === type;
+        $(catalog.tab).setAttribute('aria-selected', String(selected));
+        $(catalog.tab).tabIndex = selected ? 0 : -1;
+        $(catalog.panel).hidden = !selected;
+        if (selected && focus) $(catalog.tab).focus();
+    }
+    layoutEditors();
 }
 async function scriptRequest(path, options = {}) {
     const response = await fetch(path, { ...options, headers });
@@ -121,6 +148,7 @@ async function refreshScripts() {
 }
 async function saveCurrentScript() {
     if (!editor || scriptsBusy) return;
+    if (activeScriptType === 'exemple') { $('scriptStatus').textContent = 'Clonez cet exemple pour enregistrer vos modifications.'; return; }
     const state = scriptState();
     if (!state.name) { $('scriptName').focus(); return; }
     scriptsBusy = true;
@@ -137,6 +165,7 @@ async function saveCurrentScript() {
         savedScriptState = state;
         scriptList = scriptList.filter(item => item.id !== script.id);
         scriptList.push(script);
+        selectScriptCatalog('utilisateur');
         renderScriptList(script.id);
         $('scriptStatus').textContent = scriptDirty() ? 'Script enregistré. De nouvelles modifications restent à enregistrer.' : `Script « ${script.name} » enregistré sur le serveur.`;
         $('status').textContent = 'Script enregistré';
@@ -144,8 +173,9 @@ async function saveCurrentScript() {
         $('scriptStatus').textContent = error.message;
     } finally { scriptsBusy = false; updateScriptControls(); }
 }
-async function openSavedScript() {
-    const id = $('savedScripts').value;
+async function openSavedScript(type = scriptCatalogType) {
+    const catalog = scriptCatalogs.find(catalog => catalog.type === type);
+    const id = $(catalog.select).value;
     if (!id || scriptsBusy || !canReplaceScript()) return;
     const previousState = scriptState();
     scriptsBusy = true;
@@ -156,11 +186,31 @@ async function openSavedScript() {
         // Conserver d’éventuelles modifications saisies pendant le chargement.
         if (JSON.stringify(scriptState()) !== JSON.stringify(previousState) && !canReplaceScript()) { scriptChanged(); return; }
         replaceScript(script);
-        $('scriptStatus').textContent = `Script « ${script.name} » chargé. Cliquez sur « Exécuter le script » pour le rejouer.`;
+        $('scriptStatus').textContent = script.type === 'exemple' ?
+            'Exemple chargé. Exécutez-le ou cliquez sur « Cloner » pour créer une copie modifiable.' :
+            `Script « ${script.name} » chargé. Cliquez sur « Exécuter le script » pour le rejouer.`;
         $('status').textContent = 'Script chargé';
     } catch (error) {
         $('scriptStatus').textContent = error.message;
     } finally { scriptsBusy = false; updateScriptControls(); }
+}
+async function deleteSelectedScript() {
+    const script = scriptList.find(script => script.id === $('savedScripts').value && script.type === 'utilisateur');
+    if (!script || scriptsBusy || busy) return;
+    const unsaved = activeScriptId === script.id && scriptDirty() ? ' Les modifications non enregistrées seront également abandonnées.' : '';
+    if (!confirm(`Supprimer le script « ${script.name} » ?${unsaved}`)) return;
+    scriptsBusy = true;
+    ++listRequest;
+    listBusy = false;
+    updateScriptControls();
+    try {
+        await scriptRequest('/api/scripts/' + script.id, { method: 'DELETE' });
+        scriptList = scriptList.filter(item => item.id !== script.id);
+        if (activeScriptId === script.id) replaceScript({ code: '' });
+        renderScriptList();
+        $('scriptStatus').textContent = `Script « ${script.name} » supprimé.`;
+    } catch (error) { $('scriptStatus').textContent = error.message; }
+    finally { scriptsBusy = false; updateScriptControls(); }
 }
 async function cloneCurrentScript() {
     if (!editor || scriptsBusy) return;
@@ -253,8 +303,6 @@ async function initEditor() {
             model: monaco.editor.createModel(source, 'typescript', monaco.Uri.parse('file:///source/structure-langage-pour-ia.ts')),
             readOnly: true, domReadOnly: true, ariaLabel: 'Librairie structure-langage-pour-ia.ts en lecture seule' });
         $('run').disabled = false;
-        $('example').disabled = false;
-        $('loadExamples').disabled = false;
         $('editorStatus').textContent = 'TypeScript · autocomplétion et vérification des types · Ctrl + Espace pour les suggestions';
         updateScriptControls();
         refreshScripts();
@@ -324,18 +372,29 @@ $('resetDatabase').addEventListener('click', async () => {
     finally { busy = false; $('run').disabled = !editor; updateScriptControls(); }
 });
 window.addEventListener('semantic:reference-status',event=>{$('meta').textContent=event.detail;});
-$('example').addEventListener('click',()=>{if(!canReplaceScript())return;replaceScript({code:sample});scriptChanged();});
-$('loadExamples').addEventListener('click',async()=>{try{const r=await fetch('/api/examples');if(!r.ok)throw Error('HTTP '+r.status);const code=prepareAgentExamples(await r.text());if(!canReplaceScript())return;replaceScript({code});scriptChanged();$('status').textContent='Exemples chargés';$('meta').textContent='Les exemples contiennent des écritures : sélectionnez Écriture pour les exécuter.';}catch(e){$('status').textContent='Erreur';$('meta').textContent=String(e);}});
 $('clear').addEventListener('click',()=>{results.replaceChildren();resetReferenceActions();$('rawPanel').hidden=true;$('copy').disabled=true;last=null;$('meta').textContent='Résultats effacés.';});
 $('copy').addEventListener('click',async()=>{if(last===null)return;try{await navigator.clipboard.writeText(JSON.stringify(last,null,2));$('status').textContent='JSON copié';}catch{$('rawPanel').open=true;$('status').textContent='Copie manuelle disponible';}});
 scriptModel.onDidChangeContent(scriptChanged);
 $('scriptName').addEventListener('input',scriptChanged);
 $('mode').addEventListener('change',scriptChanged);
 $('savedScripts').addEventListener('change',updateScriptControls);
+$('savedExamples').addEventListener('change',updateScriptControls);
 $('saveScript').addEventListener('click',saveCurrentScript);
 $('cloneScript').addEventListener('click',cloneCurrentScript);
-$('openScript').addEventListener('click',openSavedScript);
+$('openScript').addEventListener('click',()=>openSavedScript('utilisateur'));
+$('openExample').addEventListener('click',()=>openSavedScript('exemple'));
+$('deleteScript').addEventListener('click',deleteSelectedScript);
 $('refreshScripts').addEventListener('click',refreshScripts);
+$('refreshExamples').addEventListener('click',refreshScripts);
+for (const catalog of scriptCatalogs) {
+    $(catalog.tab).addEventListener('click',()=>selectScriptCatalog(catalog.type));
+    $(catalog.tab).addEventListener('keydown',event=>{
+        if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+        event.preventDefault();
+        const type = event.key === 'Home' ? 'utilisateur' : event.key === 'End' ? 'exemple' : catalog.type === 'utilisateur' ? 'exemple' : 'utilisateur';
+        selectScriptCatalog(type, true);
+    });
+}
 $('newScript').addEventListener('click',()=>{if(!canReplaceScript())return;replaceScript({code:''});$('savedScripts').value='';scriptChanged();$('scriptName').focus();});
 window.addEventListener('beforeunload',event=>{if(scriptDirty()){event.preventDefault();event.returnValue='';}});
 document.addEventListener('keydown',e=>{

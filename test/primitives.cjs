@@ -4,7 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { Runtime, Ref, Phrase, variable, est, fait, select, and, or, eq, all, exists, implies } = require('../dist/runtime');
+const { Runtime, Ref, variable, est, phrase, select, and, or, eq, all, exists, implies } = require('../dist/runtime');
 
 test('Select : valeurs primitives, jointures, quantificateurs et persistance', () => {
     const dir = mkdtempSync(join(tmpdir(), 'semantic-primitives-'));
@@ -15,6 +15,7 @@ test('Select : valeurs primitives, jointures, quantificateurs et persistance', (
             assert.deepEqual(db.query(select({ value: type }, eq(variable("value"), variable("value")))), []);
         }
         const person = new Ref();
+        const objet = new Ref();
         db.transaction(() => {
             db.addMemoryComposition('Alice', 'Nom', person);
             db.addMemoryComposition(42, 'Age', person);
@@ -23,7 +24,9 @@ test('Select : valeurs primitives, jointures, quantificateurs et persistance', (
             db.addMemoryComposition(0, 'Mesure', person);
             db.addMemoryComposition(-2.5, 'Mesure', person);
             db.addMemoryComposition('Alice', 'Nom', person);
-            db.addMemoryPhrase(person, 'possède', ['nom', 'rapport'], ['poids', 1.5], ['valide', false]);
+            db.addMemoryComposition(objet, 'Rapport');
+            db.addMemoryComposition('rapport', 'Nom', objet);
+            db.addMemoryPhrase(person, 'posséder', objet, ['avec', 1.5], ['sans', false]);
         });
         const query = select({ p: 'Ref', nom: 'string', age: 'number', actif: 'boolean' }, and(
             est(variable('p'), 'Personne'),
@@ -42,8 +45,9 @@ test('Select : valeurs primitives, jointures, quantificateurs et persistance', (
         assert.deepEqual(values('boolean').sort(), [false, true]);
         assert.deepEqual(db.query(select({ value: 'number' }, eq(variable('value'), '42'))), []);
         assert.deepEqual(db.query(select({ value: 'boolean' }, eq(variable('value'), false))), [{ value: false }]);
-        assert.deepEqual(db.query(select({ label: 'string', weight: 'number', valid: 'boolean' },
-            fait(person, 'possède', ['nom', variable('label')], ['poids', variable('weight')], ['valide', variable('valid')]))),
+        assert.deepEqual(db.query(select({ label: 'string', weight: 'number', valid: 'boolean' }, and(
+            est(variable('label'), 'Nom', objet),
+            phrase(person, 'posséder', objet, ['avec', variable('weight')], ['sans', variable('valid')])))),
             [{ label: 'rapport', weight: 1.5, valid: false }]);
         assert.deepEqual(db.query(select({ value: 'string' }, and(
             est(variable('value'), 'Nom', person),
@@ -51,15 +55,15 @@ test('Select : valeurs primitives, jointures, quantificateurs et persistance', (
             all({ flag: 'boolean' }, or(eq(variable('flag'), false), eq(variable('flag'), true)))
         ))), [{ value: 'Alice' }]);
         const mixed = db.query(select({ relation: 'Phrase', label: 'string' }, and(
-            eq(variable('relation'), new Phrase(person, 'possède', [['nom', 'rapport'], ['poids', 1.5], ['valide', false]])),
+            eq(variable('relation'), phrase(person, 'posséder', objet, ['avec', 1.5], ['sans', false])),
             eq(variable('label'), 'rapport')
         )));
         assert.equal(mixed.length, 1);
-        assert.ok(mixed[0].relation instanceof Phrase);
+        assert.deepEqual(mixed[0].relation, phrase(person, 'posséder', objet, ['avec', 1.5], ['sans', false]));
         assert.throws(() => db.query(select({ value: 'Date' }, true)), /Type de variable invalide/);
         assert.throws(() => db.transaction(() => {
-            db.addMemoryComposition(999, 'Annulé', person);
-            db.addMemoryComposition('annulé', 'Annulé', person);
+            db.addMemoryComposition(999, 'annulation', person);
+            db.addMemoryComposition('annulé', 'annulation', person);
             throw Error('rollback');
         }), /rollback/);
         assert.ok(!values('number').includes(999));
@@ -83,9 +87,10 @@ test('Migration des bases existantes et valeurs dans les propositions imbriquée
         db.addMemoryComposition('Alice', 'Nom', person);
         db.addMemoryComposition(12, 'Age', person);
         const belief = all({ name: 'string' }, implies(est(variable('name'), 'Nom'), eq(variable('name'), 'Bob')));
-        db.addMemoryPhrase(person, 'pense', belief);
-        db.addMemoryPhrase(person, 'affirme', new Phrase('capteur', 'mesure', [['valeur', 1.25], ['fiable', false]]));
-        db.addMemoryPhrase(person, 'rôles', ['all', 'tous'], ['exists', 3]);
+        db.addMemoryPhrase(person, 'penser', belief);
+        db.addMemoryPhrase(person, 'affirmer', phrase('capteur', 'mesurer', ['avec', 1.25], ['sans', false]));
+        db.addMemoryComposition('tous', 'Groupe', person);
+        db.addMemoryPhrase(person, 'attribuer', ['pour', false], ['depuis', 3]);
         db.close();
         // L'ancien schéma possède les faits, mais aucun domaine de valeurs primitives.
         const legacy = new DatabaseSync(path);
@@ -97,7 +102,7 @@ test('Migration des bases existantes et valeurs dans les propositions imbriquée
         assert.deepEqual(values('number').sort((a, b) => a - b), [1.25, 3, 12]);
         assert.deepEqual(values('boolean'), [false]);
         assert.deepEqual(db.query(select({ name: 'string' }, est(variable('name'), 'Nom', person))), [{ name: 'Alice' }]);
-        assert.equal(db.query(select({ p: 'Ref' }, fait(variable('p'), 'pense', belief)))[0].p.id, person.id);
+        assert.equal(db.query(select({ p: 'Ref' }, phrase(variable('p'), 'penser', belief)))[0].p.id, person.id);
         db.close();
         db = new Runtime(path);
         assert.deepEqual(values('string').sort(), ['Alice', 'Bob', 'capteur', 'tous']);

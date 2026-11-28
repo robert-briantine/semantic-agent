@@ -24,21 +24,19 @@ export function inspectDatabase(path: string, request: { action: 'tables' } | { 
                 http_status AS httpStatus,duration_ms AS durationMs,response FROM agent_calls WHERE id=?`).get(request.id);
             return {call:call?{...call,response:call.response===null?null:JSON.parse(String(call.response))}:null};
         }
-        if (request.action === 'references') {
-            const refIds=[...new Set(request.refIds)];
+        if (request.action === 'references' || request.action === 'reference') {
+            const refIds=[...new Set(request.action === 'references' ? request.refIds : [request.refId])];
             const values=JSON.stringify(refIds.map(id=>JSON.stringify({$ref:id})));
-            const counts=db.prepare(`SELECT fact_type,count(*) AS n FROM (
+            const counts=db.prepare(`WITH matched AS (
                 SELECT DISTINCT a.fact_type,a.fact_id FROM json_each(?) selected
                 JOIN fact_arguments a ON a.type='Ref' AND a.value=selected.value
-            ) GROUP BY fact_type`).all(values);
+            ), affected AS (
+                SELECT fact_type,fact_id FROM matched
+                UNION SELECT 'phrase',p.id FROM phrases p JOIN matched m ON p.owner_type=m.fact_type AND p.owner_id=m.fact_id
+            ) SELECT fact_type,count(*) AS n FROM affected GROUP BY fact_type`).all(values);
             const existingRefs=Number(db.prepare('SELECT count(*) AS n FROM refs WHERE value IN (SELECT value FROM json_each(?))').get(values)!.n);
-            return {refIds,existingRefs,compositions:Number(counts.find(row=>row.fact_type==='composition')?.n??0),phrases:Number(counts.find(row=>row.fact_type==='phrase')?.n??0)};
-        }
-        if (request.action === 'reference') {
-            const value=JSON.stringify({$ref:request.refId});
-            const counts=db.prepare("SELECT fact_type,count(*) AS n FROM fact_arguments WHERE type='Ref' AND value=? GROUP BY fact_type").all(value);
-            return {refId:request.refId,exists:!!db.prepare('SELECT 1 FROM refs WHERE value=?').get(value),
-                compositions:Number(counts.find(row=>row.fact_type==='composition')?.n??0),phrases:Number(counts.find(row=>row.fact_type==='phrase')?.n??0)};
+            const totals={compositions:Number(counts.find(row=>row.fact_type==='composition')?.n??0),phrases:Number(counts.find(row=>row.fact_type==='phrase')?.n??0)};
+            return request.action === 'references' ? {refIds,existingRefs,...totals} : {refId:request.refId,exists:existingRefs>0,...totals};
         }
         if (request.action === 'tables') {
             const tables = db.prepare("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
@@ -74,8 +72,8 @@ export function resetDatabase(path:string) {
     try {
         db.exec('PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON;');
         try {
-            // La RAZ concerne la mémoire et l’historique, pas les scripts de la console.
-            const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'saved_scripts' ORDER BY name").all();
+            // La RAZ concerne la mémoire et l’historique ; conserver scripts et dictionnaires.
+            const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('saved_scripts','lexique_verbes','lexique_noms_communs','lexique_prepositions') ORDER BY name").all();
             // Compter avant les DELETE : les déclencheurs peuvent aussi supprimer des lignes.
             const deleted=Object.fromEntries(tables.map(row=>[String(row.name),Number(db.prepare('SELECT count(*) AS n FROM '+identifier(String(row.name))).get()!.n)]));
             for(const row of tables) db.exec('DELETE FROM '+identifier(String(row.name)));

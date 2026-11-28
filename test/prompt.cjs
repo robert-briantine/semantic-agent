@@ -6,6 +6,7 @@ const { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } = require(
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { buildAgentPrompt } = require('../dist/agent-prompt');
+const { exampleScripts, renderExampleScripts } = require('../dist/example-scripts');
 
 async function server(t, publicUrl = '') {
     const dir = mkdtempSync(join(tmpdir(), 'semantic-prompt-http-'));
@@ -73,9 +74,28 @@ test('GET /api/prompt : texte complet, URL réelle et exemples JSON exécutables
     for (const endpoint of ['library', 'examples']) {
         const source = await (await fetch(new URL('api/' + endpoint, url))).text();
         assert.ok(prompt.includes(source.trimEnd()), endpoint);
+        if (endpoint === 'examples') {
+            assert.equal(source, renderExampleScripts());
+            for (const script of exampleScripts) assert.ok(source.includes(script.code), script.name);
+        }
     }
     assert.ok(prompt.includes('URL d’exécution : ' + executeUrl));
     assert.ok(!prompt.includes('{{EXECUTE_URL}}'));
+    assert.match(prompt, /Une chaîne de caractères est interdite comme valeur de complément/);
+    assert.match(prompt, /addMemoryComposition\(objet, "Rapport"\)/);
+    assert.match(prompt, /complément direct/);
+    assert.match(prompt, /complément prépositionnel/);
+    assert.match(prompt, /N’ajoute pas de mot-clé `"objet"`/);
+    assert.match(prompt, /addMemoryPhrase\(auteur, "envoie", objet\)/);
+    assert.match(prompt, /utilise une forme conjuguée adaptée au sujet/);
+    assert.match(prompt, /phrase\(ana, "mange"\)/);
+    assert.doesNotMatch(prompt, /Traduis toujours le verbe à l’infinitif|Ne jamais utiliser un verbe conjugué/);
+    assert.match(prompt, /même catalogue que les scripts de l’onglet Exemple/);
+    assert.match(prompt, /Croyances et provenance/);
+    assert.match(prompt, /Portée de pour tout et il existe/);
+    for (const preposition of ['à', 'sur', 'pour', 'avec', 'depuis']) {
+        assert.ok(prompt.includes('| `' + preposition + '` |'));
+    }
     const bodies = [...prompt.matchAll(/^```json\n(.*?)\n```/gms)].map(match => JSON.parse(match[1]));
     assert.equal(bodies.length, 3);
     const execute = async body => {
@@ -87,11 +107,12 @@ test('GET /api/prompt : texte complet, URL réelle et exemples JSON exécutables
     };
     assert.deepEqual((await execute(bodies[0])).output, [[[]]]);
     assert.deepEqual((await execute(bodies[1])).output, [[[]]]);
-    const created = (await execute(bodies[2])).output[0][0];
-    assert.equal(typeof created.id, 'string');
-    const found = (await execute(bodies[0])).output[0][0];
-    assert.deepEqual(found, [{ p: created, nom: 'Alice' }]);
-    assert.deepEqual((await execute(bodies[2])).output, [[[{ p: created }]]]);
+    assert.deepEqual((await execute(bodies[2])).output, [[[{ nom: 'Alice' }]]]);
+    assert.deepEqual((await execute(bodies[0])).output, [[[]]]);
+    assert.deepEqual((await execute(bodies[2])).output, [[[{ nom: 'Alice' }]]]);
+    assert.deepEqual((await execute(bodies[0])).output, [[[]]]);
+    assert.match(prompt, /Chaque script est autonome et ne définit aucune fonction/);
+    assert.match(prompt, /deleteReferences/);
     const custom = await new Promise((resolve, reject) => {
         get(new URL('api/prompt', url), { headers: { Host: 'memoire.example:8080' } }, res => {
             let body = '';

@@ -4,6 +4,14 @@ const { spawn } = require('node:child_process');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
+const { exampleScripts } = require('../dist/example-scripts');
+const french = require('../dist/lexicon/french.json');
+const links = require('../dist/lexicon/prepositions.json');
+const lexicalCounts = {
+    lexique_verbes: french.verbes.length,
+    lexique_noms_communs: french.nomsCommuns.length,
+    lexique_prepositions: new Set([...links.prepositions, ...links.conjonctions]).size
+};
 
 async function startServer(t) {
     const dir = mkdtempSync(join(tmpdir(), 'semantic-database-'));
@@ -41,26 +49,32 @@ async function startServer(t) {
     }) };
 }
 
-test('SQLite : les huit tables sont consultables avant toute exécution', async t => {
+test('SQLite : les onze tables, dont les dictionnaires chargés, sont consultables avant toute exécution', async t => {
     const { request, query } = await startServer(t);
     const response = await request('/api/database/tables');
     assert.equal(response.status, 200);
     const { tables } = await response.json();
-    assert.deepEqual(tables.map(table => table.name), ['Complement', 'agent_calls', 'compositions', 'fact_arguments', 'phrases', 'primitive_values', 'refs', 'saved_scripts']);
+    assert.deepEqual(tables.map(table => table.name), ['Complement', 'agent_calls', 'compositions', 'fact_arguments', 'lexique_noms_communs', 'lexique_prepositions', 'lexique_verbes', 'phrases', 'primitive_values', 'refs', 'saved_scripts']);
     for (const table of tables) {
-        assert.equal(table.rowCount, 0);
+        assert.equal(table.rowCount, lexicalCounts[table.name] ?? (table.name === 'saved_scripts' ? exampleScripts.length : 0));
         assert.ok(table.sql.startsWith('CREATE TABLE'));
         const result = await query('SELECT * FROM "' + table.name + '";');
         assert.equal(result.status, 200);
         assert.deepEqual(result.columns, table.columns.map(column => column.name));
-        assert.deepEqual(result.rows, []);
-        assert.equal(result.hasMore, false);
+        if (table.name === 'saved_scripts') {
+            assert.equal(result.rows.length, exampleScripts.length);
+            assert.ok(result.rows.every(row => row.type === 'exemple'));
+        } else if (lexicalCounts[table.name]) {
+            assert.equal(result.rows.length, Math.min(result.limit, table.rowCount));
+            assert.ok(result.rows.every(row => typeof row.mot === 'string' && typeof row.source === 'string'));
+        } else assert.deepEqual(result.rows, []);
+        assert.equal(result.hasMore, table.rowCount > result.limit);
     }
 });
 
 test('SQLite : faits et scripts, pagination, jointures et valeurs JSON', async t => {
     const { request, query } = await startServer(t);
-    const code = 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryComposition(32,"Age",p);addMemoryComposition(true,"Actif",p);addMemoryPhrase(p,"dort");';
+    const code = 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryComposition(32,"Age",p);addMemoryComposition(true,"Actif",p);addMemoryPhrase(p,"dormir");';
     assert.equal((await request('/api/execute', { mode: 'write', code })).status, 200);
     assert.equal((await request('/api/scripts', { name: 'Alice', code, mode: 'write' })).status, 201);
     const first = await query('SELECT * FROM compositions ORDER BY id;', { limit: 2 });
@@ -75,12 +89,12 @@ test('SQLite : faits et scripts, pagination, jointures et valeurs JSON', async t
     const rows = await query(`WITH noms AS (SELECT of_value, json_extract(ref, '$') AS nom FROM compositions WHERE name='Nom')
         SELECT noms.nom, json_extract(c.ref, '$') AS age FROM noms JOIN compositions c ON c.of_value=noms.of_value WHERE c.name='Age';`);
     assert.deepEqual(rows.rows, [{ nom: 'Alice', age: 32 }]);
-    assert.deepEqual((await query("SELECT name,qualifier FROM phrases WHERE name='dort'")).rows, [{ name: 'dort', qualifier: null }]);
-    const scripts = await query('SELECT name,mode FROM saved_scripts');
+    assert.deepEqual((await query("SELECT name,qualifier FROM phrases WHERE name='dormir'")).rows, [{ name: 'dormir', qualifier: null }]);
+    const scripts = await query("SELECT name,mode FROM saved_scripts WHERE type='utilisateur'");
     assert.deepEqual(scripts.rows, [{ name: 'Alice', mode: 'write' }]);
     const metadata = await (await request('/api/database/tables')).json();
     assert.deepEqual(Object.fromEntries(metadata.tables.map(table => [table.name, table.rowCount])), {
-        Complement: 0, agent_calls: 0, compositions: 3, fact_arguments: 7, phrases: 1, primitive_values: 3, refs: 1, saved_scripts: 1
+        Complement: 0, agent_calls: 0, compositions: 3, fact_arguments: 7, ...lexicalCounts, phrases: 1, primitive_values: 3, refs: 1, saved_scripts: exampleScripts.length + 1
     });
     const values = await query("SELECT 1 AS valeur, 2 AS valeur, NULL AS vide, 9007199254740993 AS grand, x'00ff' AS binaire;");
     assert.deepEqual(values.columns, ['valeur', 'valeur:1', 'vide', 'grand', 'binaire']);
@@ -102,6 +116,19 @@ test('SQLite : erreurs SQL et écritures refusées sans modifier les données', 
     assert.deepEqual((await query('SELECT 42 AS reponse')).rows, [{ reponse: 42 }]);
 });
 
+test('API : un mot inconnu renvoie une erreur claire et annule les écritures précédentes', async t => {
+    const { request, query } = await startServer(t);
+    const response = await request('/api/execute', {
+        mode: 'write', code: 'const p=new Ref();addMemoryComposition(p,"personne");addMemoryPhrase(p,"verbeinconnuzyx");'
+    });
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.equal(data.ok, false);
+    assert.match(data.error, /Verbe ou forme conjuguée inconnue.*verbeinconnuzyx/);
+    assert.deepEqual((await query('SELECT * FROM compositions')).rows, []);
+    assert.deepEqual((await query('SELECT * FROM phrases')).rows, []);
+});
+
 test('SQLite : une requête lente est interrompue et le serveur reste disponible', async t => {
     const { request, query } = await startServer(t);
     const slow = query('WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1000000000) SELECT sum(x) FROM n;');
@@ -114,12 +141,12 @@ test('SQLite : une requête lente est interrompue et le serveur reste disponible
 
 test('API : aperçu puis suppression des faits liés à une référence, avec compléments imbriqués', async t => {
     const { request, query, remove } = await startServer(t);
-    const execution = await request('/api/execute', { mode: 'write', code: 'const p=new Ref();const autre=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryComposition("Bob","Nom",autre);addMemoryPhrase(autre,"pense",new Phrase(autre,"voit",[p]));print(p);' });
+    const execution = await request('/api/execute', { mode: 'write', code: 'const p=new Ref();const autre=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryComposition("Bob","Nom",autre);addMemoryPhrase(autre,"penser",phrase(autre, "voir", p));print(p);' });
     assert.equal(execution.status, 200);
     const id = (await execution.json()).output[0][0].id;
     const endpoint = '/api/refs/' + encodeURIComponent(id);
     const preview = await (await request(endpoint)).json();
-    assert.deepEqual(preview, { ok: true, refId: id, exists: true, compositions: 1, phrases: 1 });
+    assert.deepEqual(preview, { ok: true, refId: id, exists: true, compositions: 1, phrases: 2 });
     for (const body of [undefined, {}, { mode: 'read' }, { mode: 'admin' }]) {
         const refused = await remove(endpoint, body);
         assert.equal(refused.status, 403);
@@ -129,7 +156,7 @@ test('API : aperçu puis suppression des faits liés à une référence, avec co
     const response = await remove(endpoint, { mode: 'write' });
     assert.equal(response.status, 200);
     const result = await response.json();
-    assert.deepEqual(result.deleted, { compositions: 1, phrases: 1, refs: 1, primitiveValues: 1 });
+    assert.deepEqual(result.deleted, { compositions: 1, phrases: 2, refs: 1, primitiveValues: 1 });
     assert.deepEqual((await query('SELECT json_extract(ref,\'$\') AS nom FROM compositions')).rows, [{ nom: 'Bob' }]);
     assert.deepEqual((await query('SELECT * FROM phrases')).rows, []);
     assert.deepEqual(await (await request(endpoint)).json(), { ok: true, refId: id, exists: false, compositions: 0, phrases: 0 });
@@ -138,7 +165,7 @@ test('API : aperçu puis suppression des faits liés à une référence, avec co
 
 test('API : sélection multiple, aperçu sans doublon et suppression en mode écriture uniquement', async t => {
     const { request, query } = await startServer(t);
-    const execution = await request('/api/execute', { mode: 'write', code: 'const a=new Ref();const b=new Ref();const c=new Ref();addMemoryComposition(a,"Personne");addMemoryComposition(b,"Personne");addMemoryComposition(c,"Personne");addMemoryPhrase(a,"voit",b);addMemoryPhrase(a,"sait",c);addMemoryPhrase(c,"reste");print(a,b,c);' });
+    const execution = await request('/api/execute', { mode: 'write', code: 'const a=new Ref();const b=new Ref();const c=new Ref();addMemoryComposition(a,"Personne");addMemoryComposition(b,"Personne");addMemoryComposition(c,"Personne");addMemoryPhrase(a,"voir",b);addMemoryPhrase(a,"savoir",c);addMemoryPhrase(c,"rester");print(a,b,c);' });
     assert.equal(execution.status, 200);
     const [a, b, c] = (await execution.json()).output[0];
     const refIds = [a.id, b.id, a.id];
@@ -156,5 +183,5 @@ test('API : sélection multiple, aperçu sans doublon et suppression en mode éc
     assert.equal(deletion.status, 200);
     assert.deepEqual(await deletion.json(), { ok: true, refIds: [a.id, b.id], deleted: { compositions: 2, phrases: 2, refs: 2, primitiveValues: 0 } });
     assert.deepEqual((await query('SELECT json_extract(ref,\'$.$ref\') AS id FROM compositions')).rows, [{ id: c.id }]);
-    assert.deepEqual((await query('SELECT name FROM phrases')).rows, [{ name: 'reste' }]);
+    assert.deepEqual((await query('SELECT name FROM phrases')).rows, [{ name: 'rester' }]);
 });

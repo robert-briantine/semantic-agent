@@ -52,6 +52,7 @@ button.danger{background:#472c30;color:#ffc7c7;border:1px solid #92515d}
 .editor-pane .code-editor{flex:1;height:auto;min-height:220px;contain:size}
 .editor-pane .script-manager{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 12px;padding:8px 0}
 .editor-pane .script-row{margin:0;gap:6px}
+.script-catalog .editor-tabs{margin:0 0 8px}.script-catalog .hint{margin:6px 0 0;font-size:12px}
 .editor-pane .script-row label{min-width:130px;gap:4px}
 .editor-pane .script-row input,.editor-pane .script-row select{padding:7px}
 .editor-pane .script-row button{padding:8px;min-height:34px}

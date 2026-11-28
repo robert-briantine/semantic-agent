@@ -1,3 +1,7 @@
+import { collectPhrases } from './phrase-storage';
+import { validateVocabulary } from './vocabulary';
+import { validateComplementUsage } from './validate-complements';
+
 declare const refBrand: unique symbol;
 
 export class Ref {
@@ -6,9 +10,39 @@ export class Ref {
 
 // Types sémantiques
 
+/**
+ * Verbe français, avec ses formes conjuguées.
+ * Représente une action, un état, un processus ou une relation.
+ * Dans une phrase, privilégier une forme conjuguée adaptée au sujet et au texte.
+ * Éviter de remplacer systématiquement le verbe par son infinitif.
+ * Exemples : mange, travaille, possède, pense, devient.
+ */
 export type Verbe = string;
+
+/**
+ * Nom commun français au singulier.
+ * Représente une entité, une catégorie, une propriété
+ * ou un concept abstrait.
+ * Ne pas inclure de déterminant.
+ * Exemples : personne, voiture, âge, couleur, entreprise.
+ */
 export type NomCommun = string;
+
+/**
+ * Adjectif ou adverbe français.
+ * Qualifie un nom commun ou précise le sens d'un verbe.
+ * Utiliser le masculin singulier pour les adjectifs.
+ * Exemples : grand, rouge, intelligent, rapidement.
+ */
 export type Qualificatif = string;
+
+/**
+ * Préposition ou locution prépositive française.
+ * Définit la relation entre une action et son complément.
+ * Ne pas inclure de déterminant ni de forme contractée.
+ * Exemples : à, de, avec, pour, depuis, à cause de.
+ */
+export type Preposition = string;
 
 // Variables
 
@@ -30,23 +64,23 @@ export type Variable<T extends Variables> = [
 
 export type Element<T extends Variables = {}> =
     | Ref
-    | Phrase<T>
     | Expression<T>
     | Variable<T>
     | string | number | boolean;
 
-export type Complements<T extends Variables = {}> =
-    ([string, Element<T>] | Element<T>)[];
+// Une chaîne décrit une propriété via Composition, jamais un complément de phrase.
+export type ComplementElement<T extends Variables = {}> =
+    Ref | Expression<T> | Variable<T> | number | boolean;
+// Complément direct : élément seul. Complément introduit : [mot de liaison, élément].
+export type Complement<T extends Variables = {}> = [Preposition, ComplementElement<T>] | ComplementElement<T>;
+export type Complements<T extends Variables = {}> = Complement<T>[];
 
 // Phrase
 
-export class Phrase<T extends Variables = {}> {
-    constructor(
-        public subject: Element<T> | undefined,
-        public name: Verbe | [Verbe, Qualificatif],
-        public complements?: Complements<T>
-    ) {}
-}
+/** Représentation unique d’une phrase, également utilisable comme expression. */
+export type Phrase<T extends Variables = {}> = [
+    "phrase", Element<T> | undefined, Verbe | [Verbe, Qualificatif], ...Complement<T>[]
+];
 
 // Composition
 
@@ -77,15 +111,10 @@ export type Expression<T extends Variables = {}> =
     | ["and", ...Expression<T>[]]
     | ["or", ...Expression<T>[]]
     | ["=>", Expression<T>, Expression<T>]
+    | ["switchCase", ["=>", Expression<T>, Expression<T>][], Expression<T>]
     | ["=", Element<T>, Element<T>]
-    | ["contient", Complements<T> | Variable<T>, [string, Element<T>] | Element<T>]
-    | ["fait", Element<T> | undefined, Verbe | [Verbe, Qualificatif], Variable<T>]
-    | [
-        "fait",
-        Element<T> | undefined,
-        Verbe | [Verbe, Qualificatif],
-        ...([string, Element<T>] | Element<T>)[]
-    ]
+    | ["contient", Complements<T> | Variable<T>, Complement<T>]
+    | Phrase<T>
     | [
         "est",
         Element<T> | string | number,
@@ -139,6 +168,11 @@ export function implies<
     return ["=>", a, b];
 }
 
+// La première condition vraie détermine le résultat ; sinon, utiliser d.
+export function switchCase<const Cases extends ["=>", Expression<any>, Expression<any>][], C extends Expression<any>>(cases:Cases,d:C): ["switchCase",Cases,C] {
+    return ["switchCase", cases, d];
+}
+
 export function eq<
     A extends Element<any>,
     B extends Element<any>
@@ -184,25 +218,29 @@ export function est(
         : ["est", ref, name, of];
 }
 
-// Helper fait
+// Helper phrase
 
-export function fait<
+export function phrase<
     S extends Element<any> | undefined,
-    N extends Phrase["name"],
+    N extends Phrase[2],
     C extends Complements<any>
 >(
     subject: S,
     name: N,
     ...complements: C
-): ["fait", S, N, ...C] {
-    return ["fait", subject, name, ...complements];
+): ["phrase", S, N, ...C] {
+    const expression: ["phrase", S, N, ...C] = ["phrase", subject, name, ...complements];
+    validateComplementUsage(expression);
+    return expression;
 }
 
 // Quantifications
 // Les variables des portées parentes sont autorisées.
 
-export function contient<C extends Complements<any> | Variable<any>, E extends [string, Element<any>] | Element<any>>(complements: C, element: E): ["contient", C, E] {
-    return ["contient", complements, element];
+export function contient<C extends Complements<any> | Variable<any>, E extends Complement<any>>(complements: C, element: E): ["contient", C, E] {
+    const expression: ["contient", C, E] = ["contient", complements, element];
+    validateComplementUsage(expression);
+    return expression;
 }
 
 export function quantification<
@@ -258,27 +296,27 @@ export function addMemoryComposition(
     );
 
     validateVariables(composition);
+    validateComplementUsage(composition);
+    validateVocabulary(composition);
 
     memoryComposition.push(composition);
 }
 
 export function addMemoryPhrase(
     subject: Element | undefined,
-    name: Phrase["name"],
+    name: Phrase[2],
     ...complements: Complements
 ): Phrase {
 
-    const phrase = new Phrase(
-        subject,
-        name,
-        complements
-    );
+    const stored = phrase(subject, name, ...complements);
 
-    validateVariables(phrase);
+    validateVariables(stored);
+    validateComplementUsage(stored);
+    validateVocabulary(stored);
 
-    memoryRelation.push(phrase);
+    memoryRelation.push(stored);
 
-    return phrase;
+    return stored;
 }
 
 // Extraction récursive des références
@@ -313,14 +351,6 @@ export function getRefs(
         return;
     }
 
-    if (value instanceof Phrase) {
-
-        getRefs(value.subject, set, visited);
-        getRefs(value.complements, set, visited);
-
-        return;
-    }
-
     if (value instanceof Composition) {
 
         getRefs(value.ref, set, visited);
@@ -342,6 +372,19 @@ export function memoryRef(): Set<Ref> {
 
 // Réinitialisation de la mémoire
 
+/** Supprime les faits mentionnant ces références, y compris dans les contenus imbriqués. */
+export function deleteReferences(refs: Ref[]): void {
+    if (!Array.isArray(refs) || refs.some(ref => !(ref instanceof Ref))) throw new Error('deleteReferences attend un tableau de Ref');
+    const targets = new Set(refs);
+    for (const facts of [memoryRelation, memoryComposition]) {
+        for (let i = facts.length - 1; i >= 0; i--) {
+            const mentioned = new Set<Ref>();
+            getRefs(facts[i], mentioned);
+            if ([...mentioned].some(ref => targets.has(ref))) facts.splice(i, 1);
+        }
+    }
+}
+
 export function clearMemory(): void {
 
     memoryRelation.length = 0;
@@ -358,7 +401,7 @@ export type UsedVariableKeys<E, Depth extends unknown[] = []> =
     0 extends (1 & E) ? string :
     E extends readonly ["var", infer K extends string] ? K :
     E extends readonly ["all" | "exists", infer Local, infer Body] ? string extends keyof Local ? string : Exclude<UsedVariableKeys<Body, [...Depth, unknown]>, keyof Local> :
-    E extends Phrase<any> | Composition<any> ? string :
+    E extends Composition<any> ? string :
     E extends readonly unknown[] ? UsedVariableKeys<E[number], [...Depth, unknown]> : never;
 export type QueryResult<T extends Variables, E = unknown> = {
     -readonly [K in keyof T]: unknown extends E ? VariableTypes[T[K]] | undefined :
@@ -376,6 +419,8 @@ export function select<const T extends Variables, const E extends Expression<NoI
         expression,
         new Set(Object.keys(names))
     );
+    validateComplementUsage(expression, names);
+    validateVocabulary(expression);
 
     return ["select", names, expression];
 }
@@ -390,14 +435,6 @@ export function validateVariables(
 ): void {
 
     if (value instanceof Ref) {
-        return;
-    }
-
-    if (value instanceof Phrase) {
-
-        validateVariables(value.subject, scope);
-        validateVariables(value.complements, scope);
-
         return;
     }
 
@@ -472,8 +509,7 @@ type Domains = { [K in keyof VariableTypes]: VariableTypes[K][] };
 function usedVariables(value: unknown, bound: ReadonlySet<string> = new Set(), used = new Set<string>()): Set<string> {
     const visit = (child: unknown, scope = bound) => usedVariables(child, scope, used);
     if (value instanceof Ref) return used;
-    if (value instanceof Phrase) { visit(value.subject); visit(value.complements); }
-    else if (value instanceof Composition) { visit(value.ref); visit(value.of); }
+    if (value instanceof Composition) { visit(value.ref); visit(value.of); }
     else if (Array.isArray(value)) {
         if (value[0] === 'var' && value.length === 2 && typeof value[1] === 'string') {
             if (!bound.has(value[1])) used.add(value[1]);
@@ -490,17 +526,19 @@ function getPrimitives(x:unknown, values=new Set<Primitive>(), visited=new WeakS
     if(!x||typeof x!=='object'||visited.has(x))return values;
     visited.add(x);
     const visit=(value:unknown)=>getPrimitives(value,values,visited);
-    if(x instanceof Phrase) {visit(x.subject);for(const complement of x.complements??[])visit(complement);}
-    else if(x instanceof Composition) {visit(x.ref);visit(x.of);}
+    if(x instanceof Composition) {visit(x.ref);visit(x.of);}
     else if(Array.isArray(x)) {
         // Ignorer les noms de prédicats, rôles et variables : ce ne sont pas des valeurs.
         switch(x[0]) {
             case 'var':break;
+            case 'switchCase':
+                for(const branch of x[1] as unknown[])visit(branch);
+                visit(x[2]);break;
             case 'all':case 'exists':
                 if(x.length===3)visit(x[2]);else for(const value of x.slice(1))visit(value);
                 break;
             case 'est':visit(x[1]);visit(x[3]);break;
-            case 'fait':visit(x[1]);for(const complement of x.slice(3))visit(complement);break;
+            case 'phrase':visit(x[1]);for(const complement of x.slice(3))visit(complement);break;
             case 'contient':
                 if(!(Array.isArray(x[1])&&x[1][0]==='var'&&x[1].length===2))for(const complement of x[1] as unknown[])visit(complement);
                 visit(x[2]);break;
@@ -525,20 +563,6 @@ function equal(
 
     if (a instanceof Ref || b instanceof Ref) {
         return false;
-    }
-
-    // Comparaison des phrases
-
-    if (a instanceof Phrase && b instanceof Phrase) {
-
-        return (
-            equal(a.subject, b.subject) &&
-            equal(a.name, b.name) &&
-            equal(
-                a.complements ?? [],
-                b.complements ?? []
-            )
-        );
     }
 
     // Comparaison des compositions
@@ -643,26 +667,6 @@ function resolve(
         );
     }
 
-    // Résolution des variables dans une phrase
-
-    if (value instanceof Phrase) {
-
-        return new Phrase<any>(
-
-            resolve(
-                value.subject,
-                binding
-            ) as Element<any> | undefined,
-
-            value.name,
-
-            resolve(
-                value.complements,
-                binding
-            ) as Complements<any> | undefined
-        );
-    }
-
     return value;
 }
 
@@ -752,6 +756,12 @@ function evaluate(
                 evaluate(e[2], b, d)
             );
 
+        case "switchCase":
+            for (const [, condition, result] of e[1]) {
+                if (evaluate(condition, b, d)) return evaluate(result, b, d);
+            }
+            return evaluate(e[2], b, d);
+
         case "=":
 
             return equal(
@@ -772,7 +782,7 @@ function evaluate(
             );
         }
 
-        case "fait": {
+        case "phrase": {
 
             const subject = resolve(e[1], b);
 
@@ -784,10 +794,10 @@ function evaluate(
 
             return memoryRelation.some(p =>
 
-                equal(p.subject, subject) &&
-                equal(p.name, e[2]) &&
+                equal(p[1], subject) &&
+                equal(p[2], e[2]) &&
                 equal(
-                    p.complements ?? [],
+                    p.slice(3),
                     complements
                 )
             );
@@ -824,6 +834,9 @@ function evaluate(
             }
 
             return false;
+
+        default:
+            throw new Error('Opérateur inconnu');
     }
 }
 
@@ -841,15 +854,21 @@ export function query<const T extends Variables, const E extends Expression<NoIn
         expression,
         new Set(Object.keys(names))
     );
+    validateComplementUsage(expression, names);
+    validateVocabulary(expression);
 
     for (const type of Object.values(names)) {
         if (!['Ref', 'Phrase', 'string', 'number', 'boolean', 'complements'].includes(type)) throw new Error('Type de variable invalide');
     }
     const primitives = new Set<Primitive>();
     for (const fact of [...memoryComposition, ...memoryRelation]) getPrimitives(fact, primitives);
+    const phrases: Phrase[] = [];
+    for (const fact of [...memoryComposition, ...memoryRelation]) {
+        for (const value of collectPhrases<Phrase>(fact)) if (!phrases.some(other => equal(value, other))) phrases.push(value);
+    }
     const domains: Domains = {
-        Ref: [...memoryRef()], Phrase: [...memoryRelation],
-        complements: memoryRelation.map(phrase => phrase.complements ?? []).filter((value, i, all) => all.findIndex(other => equal(value, other)) === i),
+        Ref: [...memoryRef()], Phrase: phrases,
+        complements: phrases.map(value => value.slice(3) as Complements).filter((value, i, all) => all.findIndex(other => equal(value, other)) === i),
         string: [...primitives].filter((value): value is string => typeof value === 'string'),
         number: [...primitives].filter((value): value is number => typeof value === 'number'),
         boolean: [...primitives].filter((value): value is boolean => typeof value === 'boolean')

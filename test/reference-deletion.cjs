@@ -4,7 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { Runtime, Ref, Phrase, est, fait, all, implies, variable, select, eq } = require('../dist/runtime');
+const { Runtime, Ref, est, phrase, all, implies, variable, select, eq } = require('../dist/runtime');
 
 function setup(t) {
     const dir = mkdtempSync(join(tmpdir(), 'semantic-delete-ref-'));
@@ -25,31 +25,31 @@ test('Suppression : références directes, compléments, propositions imbriquée
     runtime.transaction(() => {
         runtime.addMemoryComposition(target, 'Personne');
         runtime.addMemoryComposition('Alice', 'Nom', target);
-        runtime.addMemoryComposition(new Phrase(other, 'voit', [target]), 'Observation');
-        runtime.addMemoryComposition(other, 'Relation', est(target, 'Niché'));
+        runtime.addMemoryComposition(phrase(other, 'voir', target), 'Observation');
+        runtime.addMemoryComposition(other, 'Relation', est(target, 'imbrication'));
         runtime.addMemoryComposition('exclusif', 'Signal', target);
         runtime.addMemoryComposition(32, 'Nombre', target);
-        runtime.addMemoryPhrase(target, 'dort');
-        runtime.addMemoryPhrase(other, 'voit', target);
-        runtime.addMemoryPhrase(other, 'parle', ['à', target]);
-        runtime.addMemoryPhrase(other, 'pense', new Phrase(other, 'affirme', [new Phrase(target, 'connaît', [other])]));
-        runtime.addMemoryPhrase(other, 'croit', all({ p: 'Ref' }, implies(fait(variable('p'), 'voit', target), est(variable('p'), 'Personne'))));
-        runtime.addMemoryPhrase(other, 'répète', new Ref(target.id), ['avec', target], orphan);
-        runtime.addMemoryPhrase(other, 'dit', false, target);
+        runtime.addMemoryPhrase(target, 'dormir');
+        runtime.addMemoryPhrase(other, 'voir', target);
+        runtime.addMemoryPhrase(other, 'parler', ['à', target]);
+        runtime.addMemoryPhrase(other, 'penser', phrase(other, 'affirmer', phrase(target, 'connaître', other)));
+        runtime.addMemoryPhrase(other, 'croire', all({ p: 'Ref' }, implies(phrase(variable('p'), 'voir', target), est(variable('p'), 'Personne'))));
+        runtime.addMemoryPhrase(other, 'répéter', new Ref(target.id), ['avec', target], orphan);
+        runtime.addMemoryPhrase(other, 'dire', false, target);
         // Faits indépendants, y compris des textes identiques à l’ID ou à son JSON.
         runtime.addMemoryComposition(other, 'Personne');
         runtime.addMemoryComposition('Bob', 'Nom', other);
         runtime.addMemoryComposition(32, 'Nombre', other);
-        runtime.addMemoryComposition(target.id, 'IdentifiantLittéral', other);
-        runtime.addMemoryComposition(JSON.stringify({ $ref: target.id }), 'FormatLittéral', other);
+        runtime.addMemoryComposition(target.id, 'code', other);
+        runtime.addMemoryComposition(JSON.stringify({ $ref: target.id }), 'format', other);
         runtime.addMemoryComposition(prefix, 'Personne');
-        runtime.addMemoryPhrase(prefix, 'reste', other);
+        runtime.addMemoryPhrase(prefix, 'rester', other);
     });
     const plan = sql.prepare("EXPLAIN QUERY PLAN SELECT fact_id FROM fact_arguments WHERE type='Ref' AND value=?").all(JSON.stringify({ $ref: target.id }));
     assert.ok(plan.some(row => /SEARCH .*PRIMARY KEY/.test(row.detail)), JSON.stringify(plan));
-    assert.deepEqual(runtime.deleteReference(target.id), { refId: target.id, deleted: { compositions: 6, phrases: 7, refs: 2, primitiveValues: 3 } });
+    assert.deepEqual(runtime.deleteReference(target.id), { refId: target.id, deleted: { compositions: 6, phrases: 11, refs: 2, primitiveValues: 3 } });
     assert.equal(runtime.memoryComposition.length, 6);
-    assert.deepEqual(runtime.memoryRelation.map(phrase => phrase.name), ['reste']);
+    assert.deepEqual(runtime.memoryRelation.map(value => value[2]), ['rester']);
     assert.deepEqual(runtime.query(select({ p: 'Ref' }, eq(variable('p'), variable('p')))).map(row => row.p.id).sort(), [other.id, prefix.id].sort());
     assert.deepEqual(runtime.query(select({ n: 'number' }, eq(variable('n'), variable('n')))), [{ n: 32 }]);
     assert.deepEqual(runtime.query(select({ b: 'boolean' }, eq(variable('b'), variable('b')))), []);
@@ -67,17 +67,17 @@ test('Migration : l’index des arguments est reconstruit pour les faits existan
     const { runtime, sql, path } = setup(t);
     const target = new Ref(), other = new Ref();
     runtime.addMemoryComposition('Nom', 'Nom', target);
-    runtime.addMemoryPhrase(other, 'pense', new Phrase(other, 'voit', [target, new Ref(target.id)]));
+    runtime.addMemoryPhrase(other, 'penser', phrase(other, 'voir', target, new Ref(target.id)));
     const before = { compositions: sql.prepare('SELECT * FROM compositions').all(), phrases: sql.prepare('SELECT * FROM phrases').all() };
     sql.exec('DROP TRIGGER compositions_delete_arguments; DROP TRIGGER phrases_delete_arguments; DROP TABLE fact_arguments;');
     const migrated = new Runtime(path);
     try {
         assert.deepEqual(sql.prepare('SELECT * FROM compositions').all(), before.compositions);
         assert.deepEqual(sql.prepare('SELECT * FROM phrases').all(), before.phrases);
-        assert.equal(sql.prepare("SELECT count(*) AS n FROM fact_arguments WHERE type='Ref' AND value=?").get(JSON.stringify({ $ref: target.id })).n, 2);
+        assert.equal(sql.prepare("SELECT count(*) AS n FROM fact_arguments WHERE type='Ref' AND value=?").get(JSON.stringify({ $ref: target.id })).n, 3);
         const result = migrated.deleteReference(target.id);
         assert.equal(result.deleted.compositions, 1);
-        assert.equal(result.deleted.phrases, 1);
+        assert.equal(result.deleted.phrases, 2);
         assert.equal(sql.prepare('SELECT count(*) AS n FROM fact_arguments').get().n, 0);
     } finally { migrated.close(); }
 });
@@ -86,7 +86,7 @@ test('Suppression transactionnelle : une erreur restaure les faits et tous les i
     const { runtime, sql } = setup(t);
     const ref = new Ref();
     runtime.addMemoryComposition('Alice', 'Nom', ref);
-    runtime.addMemoryPhrase(ref, 'pense', 'valeur');
+    runtime.addMemoryPhrase(ref, 'penser', 42);
     const before = snapshot(sql);
     sql.exec("CREATE TRIGGER reject_phrase_delete BEFORE DELETE ON phrases BEGIN SELECT RAISE(ABORT,'échec simulé'); END;");
     assert.throws(() => runtime.deleteReference(ref.id), /échec simulé/);
@@ -97,13 +97,13 @@ test('Suppression transactionnelle : une erreur restaure les faits et tous les i
     assert.equal(runtime.deleteReference(ref.id).deleted.phrases, 1);
 });
 
-test('Une erreur d’indexation annule aussi une insertion directe de fait', t => {
+test('Une erreur d’indexation annule aussi une insertion directe de phrase', t => {
     const { runtime, sql } = setup(t);
     const before = snapshot(sql);
     sql.exec("CREATE TRIGGER reject_argument BEFORE INSERT ON fact_arguments BEGIN SELECT RAISE(ABORT,'index indisponible'); END;");
     assert.throws(() => runtime.addMemoryComposition('Alice', 'Nom', new Ref()), /index indisponible/);
     assert.deepEqual(snapshot(sql), before);
-    assert.throws(() => runtime.addMemoryPhrase(new Ref(), 'pense', 42), /index indisponible/);
+    assert.throws(() => runtime.addMemoryPhrase(new Ref(), 'penser', 42), /index indisponible/);
     assert.deepEqual(snapshot(sql), before);
 });
 
@@ -111,14 +111,14 @@ test('Suppression groupée : références et faits communs dédupliqués', t => 
     const { runtime, sql } = setup(t);
     const a = new Ref(), b = new Ref(), c = new Ref();
     for (const ref of [a, b, c]) runtime.addMemoryComposition(ref, 'Personne');
-    runtime.addMemoryPhrase(a, 'voit', b);
-    runtime.addMemoryPhrase(a, 'sait', c);
-    runtime.addMemoryPhrase(c, 'reste');
+    runtime.addMemoryPhrase(a, 'voir', b);
+    runtime.addMemoryPhrase(a, 'savoir', c);
+    runtime.addMemoryPhrase(c, 'rester');
     assert.deepEqual(runtime.deleteReferences([a.id, b.id, a.id]), {
         refIds: [a.id, b.id], deleted: { compositions: 2, phrases: 2, refs: 2, primitiveValues: 0 }
     });
     assert.deepEqual(runtime.memoryComposition.map(value => value.ref.id), [c.id]);
-    assert.deepEqual(runtime.memoryRelation.map(value => value.name), ['reste']);
+    assert.deepEqual(runtime.memoryRelation.map(value => value[2]), ['rester']);
     assert.equal(sql.prepare('SELECT count(*) AS n FROM fact_arguments').get().n, 2);
 });
 
@@ -127,10 +127,10 @@ test('Suppression groupée : une erreur sur la seconde référence annule aussi 
     const a = new Ref(), b = new Ref();
     runtime.addMemoryComposition('Alice', 'Nom', a);
     runtime.addMemoryComposition('Bob', 'Nom', b);
-    runtime.addMemoryPhrase(a, 'ok');
-    runtime.addMemoryPhrase(b, 'bloqué');
+    runtime.addMemoryPhrase(a, 'agir');
+    runtime.addMemoryPhrase(b, 'bloquer');
     const before = snapshot(sql);
-    sql.exec("CREATE TRIGGER reject_second_delete BEFORE DELETE ON phrases WHEN OLD.name='bloqué' BEGIN SELECT RAISE(ABORT,'seconde référence'); END;");
+    sql.exec("CREATE TRIGGER reject_second_delete BEFORE DELETE ON phrases WHEN OLD.name='bloquer' BEGIN SELECT RAISE(ABORT,'seconde référence'); END;");
     assert.throws(() => runtime.deleteReferences([a.id, b.id]), /seconde référence/);
     assert.deepEqual(snapshot(sql), before);
 });

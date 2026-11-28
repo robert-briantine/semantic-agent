@@ -6,6 +6,8 @@ const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { inspectDatabase } = require('../dist/database');
+const { vocabularyTables } = require('../dist/vocabulary');
+const preservedTables = new Set(['saved_scripts', ...vocabularyTables]);
 
 async function setup(t) {
     const dir = mkdtempSync(join(tmpdir(), 'semantic-agent-calls-'));
@@ -108,7 +110,7 @@ test('Historique : les erreurs et les sorties trop volumineuses sont conservées
 
 test('RAZ : mémoire et historique vidés, scripts conservés et réutilisables', async t => {
     const { request, tables } = await setup(t);
-    const code = 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryPhrase(p,"donne",["à",new Ref()],42);';
+    const code = 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryPhrase(p,"donner",["à",new Ref()],42);';
     assert.equal((await request('/api/agent/execute', { source: 'Alice donne un objet.', code, mode: 'write' })).status, 200);
     const saved = await request('/api/scripts', { name: 'Test', code, mode: 'write' });
     assert.equal(saved.status, 201);
@@ -121,8 +123,8 @@ test('RAZ : mémoire et historique vidés, scripts conservés et réutilisables'
     const reset = await request('/api/database/reset', { confirm: 'RAZ' });
     assert.equal(reset.status, 200);
     assert.equal(reset.data.ok, true);
-    assert.deepEqual(reset.data.deleted, Object.fromEntries(before.filter(table => table.name !== 'saved_scripts').map(table => [table.name, table.rowCount])));
-    assert.ok(tables().every(table => table.name === 'saved_scripts' ? table.rowCount === 2 : table.rowCount === 0));
+    assert.deepEqual(reset.data.deleted, Object.fromEntries(before.filter(table => !preservedTables.has(table.name)).map(table => [table.name, table.rowCount])));
+    assert.ok(tables().every(table => preservedTables.has(table.name) ? table.rowCount === before.find(previous => previous.name === table.name).rowCount : table.rowCount === 0));
     assert.deepEqual(tables().map(table => [table.name, table.sql]), before.map(table => [table.name, table.sql]));
     assert.deepEqual((await request('/api/scripts')).data, scriptsBefore);
     assert.deepEqual((await request('/api/scripts/' + saved.data.id)).data, saved.data);
@@ -134,12 +136,12 @@ test('RAZ : mémoire et historique vidés, scripts conservés et réutilisables'
     const updated = await request('/api/scripts/' + saved.data.id, { name: 'Test modifié', code: 'print(2);', mode: 'read' }, 'PUT');
     assert.equal(updated.status, 200);
     assert.equal(updated.data.id, saved.data.id);
-    assert.equal((await request('/api/scripts')).data.length, 2);
+    assert.equal((await request('/api/scripts')).data.length, scriptsBefore.length);
 });
 
 test('RAZ : une erreur annule la suppression des tables déjà vidées', async t => {
     const { request, tables, path } = await setup(t);
-    await request('/api/agent/execute', { source: 'Alice donne un objet.', mode: 'write', code: 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryPhrase(p,"donne",42);' });
+    await request('/api/agent/execute', { source: 'Alice donne un objet.', mode: 'write', code: 'const p=new Ref();addMemoryComposition("Alice","Nom",p);addMemoryPhrase(p,"donner",42);' });
     const sql = new DatabaseSync(path);
     try {
         const before = tables();
@@ -161,7 +163,7 @@ test('Exécution en cours : RAZ et autres écritures refusées, timeout historis
     try {
         const insert = sql.prepare('INSERT INTO refs(value) VALUES (?)');
         for (let i = 0; i < 150; i++) insert.run(JSON.stringify({ $ref: 'ref-' + i }));
-        const pending = request('/api/agent/execute', { source: 'Requête volontairement trop coûteuse.', code: 'print(query(select({a:"Ref",b:"Ref",c:"Ref",d:"Ref"},eq(new Phrase(variable("a"),"x",[variable("b")]),new Phrase(variable("c"),"y",[variable("d")])))));' });
+        const pending = request('/api/agent/execute', { source: 'Requête volontairement trop coûteuse.', code: 'print(query(select({a:"Ref",b:"Ref",c:"Ref",d:"Ref"},eq(phrase(variable("a"), "voir", variable("b")),phrase(variable("c"), "penser", variable("d"))))));' });
         let call;
         for (let i = 0; i < 100 && !call; i++) {
             await new Promise(resolve => setTimeout(resolve, 10));

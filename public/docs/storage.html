@@ -34,6 +34,7 @@
                 <a href="#arguments">fact_arguments — index des faits</a>
                 <a href="#scripts">saved_scripts — scripts</a>
                 <a href="#agent-calls">agent_calls — historique de l’agent</a>
+                <a href="#lexiques">Dictionnaires français</a>
                 <a href="#encoding">Format JSON</a>
                 <a href="#example">Exemple d’enregistrement</a>
                 <a href="#queries">Requêtes et transactions</a>
@@ -42,8 +43,8 @@
         <article class="panel storage-document">
             <h2 id="overview">Stockage SQLite</h2>
             <p>L’application conserve les connaissances et les scripts dans un même fichier SQLite : <code>data/memory.sqlite</code> par défaut. La variable <code>MEMORY_DB</code> permet de choisir un autre chemin. Les données sont conservées entre les exécutions et les redémarrages.</p>
-            <p>Le schéma comporte huit tables. <code>compositions</code> et <code>phrases</code> contiennent les faits ; <code>refs</code> et <code>primitive_values</code> fournissent les domaines de valeurs utilisés par les requêtes. <code>Complement</code> indexe les compléments ordonnés de chaque phrase. <code>fact_arguments</code> relie chaque fait à ses références et valeurs. <code>saved_scripts</code> conserve les programmes de la console. <code>agent_calls</code> conserve les appels exécutés pour l’agent.</p>
-            <p>Le serveur initialise les huit tables au démarrage. La source <code>structure-langage-pour-ia.ts</code> présentée à l’agent est une référence avec mémoire en RAM ; l’exécution par l’API utilise ce stockage SQLite.</p>
+            <p>Le schéma comporte onze tables. <code>compositions</code> et <code>phrases</code> contiennent les faits ; <code>refs</code> et <code>primitive_values</code> fournissent les domaines de valeurs utilisés par les requêtes. <code>Complement</code> indexe les compléments ordonnés de chaque phrase. <code>fact_arguments</code> relie chaque fait à ses références et valeurs. <code>saved_scripts</code> conserve les programmes de la console. <code>agent_calls</code> conserve les appels exécutés pour l’agent.</p>
+            <p>Le serveur initialise les onze tables au démarrage, dont les trois dictionnaires <code>lexique_verbes</code>, <code>lexique_noms_communs</code> et <code>lexique_prepositions</code>. La source <code>structure-langage-pour-ia.ts</code> présentée à l’agent est une référence avec mémoire en RAM ; l’exécution par l’API utilise ce stockage SQLite.</p>
             <p><a class="nav-link" href="/#database">Ouvrir les tables et les requêtes SQL →</a></p>
 
             <section aria-labelledby="refs">
@@ -72,18 +73,30 @@
 
             <section aria-labelledby="phrases">
                 <h3 id="phrases">phrases — actions, relations et propositions</h3>
-                <p><code>addMemoryPhrase(subject, name, ...complements)</code> crée une ligne. Le sujet peut être absent et les compléments peuvent contenir des références, des valeurs, des rôles ou des propositions imbriquées.</p>
+                <p><code>phrase(subject, name, ...complements)</code> construit le tuple <code>["phrase", subject, name, ...complements]</code>, sans écriture. <code>addMemoryPhrase</code> enregistre ce tuple comme affirmation indépendante et crée aussi les lignes de ses phrases imbriquées. Le sujet peut être absent et les compléments peuvent contenir des références, des nombres, des booléens ou des propositions imbriquées.</p>
                 <div class="storage-table"><table><caption>Colonnes de phrases</caption><thead><tr><th>Colonne</th><th>Type et contrainte</th><th>Contenu</th></tr></thead><tbody>
                     <tr><td><code>id</code></td><td>INTEGER, clé primaire</td><td>Identifiant technique de la ligne, distinct de l’identité d’une entité.</td></tr>
                     <tr><td><code>subject</code></td><td>TEXT, NOT NULL</td><td>Sujet sérialisé, ou marqueur <code>{"$undefined":true}</code>.</td></tr>
                     <tr><td><code>name</code></td><td>TEXT, NOT NULL</td><td>Verbe en texte brut, par exemple <code>roule</code>, sans guillemets JSON.</td></tr>
                     <tr><td><code>qualifier</code></td><td>TEXT, nullable</td><td>Qualificatif en texte brut : <code>["roule", "très vite"]</code> devient <code>name = roule</code> et <code>qualifier = très vite</code>. Un nom simple a un qualificatif SQL NULL.</td></tr>
                     <tr><td><code>complements</code></td><td>TEXT, NOT NULL</td><td>Tableau JSON ordonné des compléments, par exemple <code>[["à",{"$ref":"uuid-bob"}]]</code>.</td></tr>
-                    <tr><td><code>value</code></td><td>TEXT, NOT NULL</td><td>Phrase complète au format <code>{"$phrase":[subject,name,complements]}</code>.</td></tr>
+                    <tr><td><code>value</code></td><td>TEXT, NOT NULL</td><td>Tuple complet au format <code>["phrase",subject,name,...complements]</code>.</td></tr>
+                    <tr><td><code>owner_type</code></td><td>TEXT, nullable</td><td>SQL NULL pour une affirmation indépendante ; <code>phrase</code> ou <code>composition</code> pour une phrase contenue dans un autre fait.</td></tr>
+                    <tr><td><code>owner_id</code></td><td>INTEGER, nullable</td><td>Identifiant du fait contenant ; SQL NULL pour une affirmation indépendante.</td></tr>
                 </tbody></table></div>
-                <p>Les recherches <code>fait(...)</code> utilisent les colonnes séparées. Le domaine des variables <code>"Phrase"</code> est constitué des lignes de cette table. Une phrase ou une expression imbriquée reste dans le JSON du fait qui la contient ; elle ne crée pas une ligne indépendante.</p>
-                <p>Index : <code>phrase_lookup(name, subject, complements, qualifier)</code> et <code>phrase_reverse(name, complements, subject, qualifier)</code>.</p>
-                <p>Par exemple, « Alice pense que Bob dort » enregistre une croyance attribuée à Alice. Cela n’enregistre pas « Bob dort » comme fait indépendant.</p>
+                <p>Les recherches <code>phrase(...)</code> utilisent les colonnes séparées et sélectionnent les affirmations indépendantes (<code>owner_type IS NULL</code>). Le domaine des variables <code>"Phrase"</code> contient tous les tuples stockés, y compris imbriqués. Chaque contenu distinct possède une ligne par fait contenant, également lorsqu’il figure dans une composition ou dans une négation. Les anciennes représentations sont converties automatiquement, sans supprimer les faits ni changer leurs identifiants.</p>
+                <p>Index : <code>phrase_lookup(name, subject, complements, qualifier)</code>, <code>phrase_reverse(name, complements, subject, qualifier)</code> et <code>phrase_owner(owner_type, owner_id)</code>. Les déclencheurs <code>compositions_delete_phrases</code> et <code>phrases_delete_phrases</code> suppriment les lignes dépendantes lors du nettoyage du contenant.</p>
+                <p>Par exemple, « Alice pense que Bob dort » crée une ligne indépendante pour la croyance d’Alice et une ligne rattachée pour le contenu « Bob dort ». La seconde conserve ce contexte et ne rend pas <code>phrase(bob, "dort")</code> vrai en dehors de la croyance.</p>
+            </section>
+
+            <section aria-labelledby="lexiques">
+                <h3 id="lexiques">Dictionnaires français</h3>
+                <p><code>lexique_verbes</code> contient 88 811 formes verbales, conjugaisons comprises ; <code>lexique_noms_communs</code>, 43 654 noms singuliers ou invariables ; <code>lexique_prepositions</code>, 140 prépositions et locutions ainsi que 8 conjonctions déjà utilisées avec les propositions. Les colonnes sont <code>mot</code> (TEXT, clé primaire), <code>source</code> (TEXT) et <code>nature</code> (TEXT). La troisième table distingue prépositions et conjonctions par la colonne <code>nature</code>.</p>
+                <p>Les données sont incluses dans <code>src/lexicon/</code> et chargées sans réseau à l’ouverture de la base. Les formes verbales et noms sont extraits de <a href="https://www.lexique.org/">Lexique 4.15</a>, sous CC BY-SA 4.0 ; le dépôt conserve licence et provenance. La liste est finie et peut manquer certains termes. Pour régénérer : <code>python3 scripts/import-lexicon.py</code>, puis <code>npm run build</code>.</p>
+                <p>Un verbe ou une forme verbale inconnue, un nom inconnu ou une préposition absente provoque une erreur dans les insertions et requêtes, y compris imbriquées. Les phrases utilisent une forme conjuguée adaptée au texte, par exemple <code>phrase(p, "mange")</code> ou <code>phrase(p, "travaillait")</code>. Les prédicats sont comparés exactement, sans lemmatisation implicite. Les anciennes bases sont automatiquement enrichies avec les conjugaisons. L’API renvoie HTTP 400 avec le mot et la table concernés ; les écritures de l’appel sont annulées. Les noms propres et valeurs textuelles restent libres. Les qualificatifs n’ont pas de table dédiée. Les dictionnaires sont conservés par la RAZ.</p>
+                <pre><code>SELECT mot FROM lexique_verbes WHERE mot LIKE 'mang%';
+SELECT mot FROM lexique_noms_communs WHERE mot LIKE 'person%';
+SELECT mot, nature FROM lexique_prepositions ORDER BY mot;</code></pre>
             </section>
 
             <section aria-labelledby="primitives">
@@ -100,19 +113,21 @@
             <section aria-labelledby="complements">
                 <h3 id="complements">Complement — compléments ordonnés des phrases</h3>
                 <p>Chaque complément d’une phrase mémorisée possède une ligne. Les doublons sont conservés et une phrase sans complément n’ajoute aucune ligne. Une phrase imbriquée reste une valeur JSON dans <code>Element</code>.</p>
+                <p>Une chaîne est interdite comme valeur de complément : ni <code>"rapport"</code> ni <code>["objet", "rapport"]</code> ne sont autorisés. Le mot-clé reste du texte ; la valeur désigne une entité par sa <code>Ref</code>. Par exemple : <code>const objet = new Ref(); addMemoryComposition(objet, "Rapport"); addMemoryPhrase(auteur, "envoie", objet);</code>. Les textes descriptifs sont enregistrés dans les compositions. Les variables <code>string</code> sont également refusées dans une position de complément ; nombres, booléens, phrases et propositions restent autorisés.</p>
                 <div class="storage-table"><table><caption>Colonnes de Complement</caption><thead><tr><th>Colonne</th><th>Type et contrainte</th><th>Contenu</th></tr></thead><tbody>
                     <tr><td><code>idPhrase</code></td><td>INTEGER, NOT NULL</td><td>Identifiant dans <code>phrases</code>.</td></tr>
                     <tr><td><code>ordre</code></td><td>INTEGER, NOT NULL</td><td>Position du complément, à partir de 0.</td></tr>
                     <tr><td><code>motClef</code></td><td>TEXT, nullable</td><td>Rôle en texte brut, par exemple <code>à</code> ; SQL NULL pour un élément nu.</td></tr>
                     <tr><td><code>Element</code></td><td>TEXT, NOT NULL</td><td>Valeur encodée en JSON, sans le mot-clef.</td></tr>
                 </tbody></table></div>
+                <p>Le complément direct, notamment le COD, n’a pas de mot-clé : « envoie un rapport à Clara » devient <code>phrase(auteur, "envoie", rapport, ["à", clara])</code>. Un couple conserve le mot de liaison naturel : <code>à</code>, <code>sur</code>, <code>pour</code>, <code>avec</code>, <code>depuis</code>, etc. Le type <code>Preposition</code> est une chaîne documentée ; le moteur exige un mot de liaison présent dans <code>lexique_prepositions</code>. Ne pas ajouter un rôle <code>objet</code> à une référence directe.</p>
                 <p>La clé primaire est <code>(idPhrase, ordre)</code>. L’index <code>complement_lookup(idPhrase, motClef, Element)</code> permet de rechercher un complément exact. La migration remplit cette table à partir des phrases existantes. Les écritures et suppressions sont transactionnelles ; le déclencheur <code>phrases_delete_complements</code> nettoie les lignes d’une phrase supprimée.</p>
-                <p>Une variable de type <code>"complements"</code> parcourt les listes de <code>phrases.complements</code>, y compris les listes vides. Dans <code>fait</code>, elle représente la liste entière. <code>contient</code> teste la présence d’un couple exact ou d’un élément nu, indépendamment de sa position et des autres compléments :</p>
+                <p>Une variable de type <code>"complements"</code> parcourt les listes de <code>phrases.complements</code>, y compris les listes vides et celles des phrases imbriquées. Dans <code>phrase</code>, elle représente la liste entière. <code>contient</code> teste la présence d’un couple exact ou d’un élément nu, indépendamment de sa position et des autres compléments :</p>
                 <pre><code>print(query(select({ p: "Ref", c: "complements", dest: "Ref" }, and(
-    fait(variable("p"), "donne", variable("c")),
+    phrase(variable("p"), "donne", variable("c")),
     contient(variable("c"), ["à", variable("dest")])
 ))));</code></pre>
-                <p>Les formes <code>["fait", sujet, verbe, ["var", "c"]]</code> et <code>["contient", ["var", "c"], [motClef, element]]</code> sont également disponibles. <code>contient</code> accepte une liste littérale. Avec un autre type de variable, le dernier argument de <code>fait</code> reste un complément unique.</p>
+                <p>Les formes <code>["phrase", sujet, verbe, ["var", "c"]]</code> et <code>["contient", ["var", "c"], [motClef, element]]</code> sont également disponibles. <code>contient</code> accepte une liste littérale. Avec un autre type de variable, le dernier argument de <code>phrase</code> reste un complément unique.</p>
             </section>
 
             <section aria-labelledby="arguments">
@@ -141,9 +156,13 @@
                     <tr><td><code>name</code></td><td>TEXT, NOT NULL, UNIQUE</td><td>Nom choisi dans la console.</td></tr>
                     <tr><td><code>code</code></td><td>TEXT, NOT NULL</td><td>Code TypeScript sous forme de texte.</td></tr>
                     <tr><td><code>mode</code></td><td>TEXT, NOT NULL, CHECK</td><td>Valeur limitée à <code>read</code> ou <code>write</code>.</td></tr>
+                    <tr><td><code>type</code></td><td>TEXT, NOT NULL, CHECK, DEFAULT 'utilisateur'</td><td><code>exemple</code> pour les modèles fournis ; <code>utilisateur</code> pour les scripts créés ou clonés. Les scripts existants deviennent <code>utilisateur</code> lors de la migration.</td></tr>
                     <tr><td><code>updated_at</code></td><td>TEXT, NOT NULL</td><td>Date ISO de création ou de dernière modification ; exposée sous le nom <code>updatedAt</code> dans l’API.</td></tr>
                 </tbody></table></div>
-                <p>Le bouton <strong>Cloner</strong> enregistre le code et le mode courants dans une nouvelle ligne, avec un nouvel UUID et un nom disponible (« Nom — copie », « Nom — copie 2 », etc.), puis charge cette copie. Le script d’origine est conservé et le code n’est pas exécuté. Une modification avec <strong>Enregistrer</strong> remplace le nom, le code et le mode en conservant l’UUID. Il n’y a pas d’historique de versions. SQLite crée les index associés à la clé primaire et au nom unique.</p>
+                <p>L’onglet <strong>Script</strong> affiche uniquement les scripts de type <code>utilisateur</code> ; l’onglet <strong>Exemple</strong> affiche les scripts préinstallés de type <code>exemple</code>. Changer d’onglet conserve le code courant. Le nom et le code d’un exemple chargé sont en lecture seule. Pour les modifier, cliquer sur <strong>Cloner</strong> : la copie de type <code>utilisateur</code> s’ouvre dans <strong>Script</strong>.</p>
+                <p>Le catalogue contient 25 scripts, ajoutés automatiquement sans exécution, couvrant les booléens, <code>est</code>, <code>phrase</code>, <code>eq</code>, <code>not</code>, <code>and</code>, <code>or</code>, <code>implies</code>, <code>contient</code>, <code>all</code>, <code>exists</code> et <code>switchCase</code>. Chaque script est autonome et sans définition de fonction : il crée ses données privées, affiche son résultat attendu puis les supprime dans <code>finally</code> avec <code>deleteReferences</code>. Aucun autre exemple n’est requis. Les données temporaires nécessitent le mode écriture ; les booléens seuls restent en lecture. Les exemples sont idempotents et préservent les données préexistantes, même homonymes. Les scripts restent présents après une RAZ. <strong>Supprimer</strong> retire un script utilisateur après confirmation ; l’API <code>DELETE /api/scripts/:id</code> refuse la suppression d’un exemple (HTTP 403).</p>
+                <p>Le scénario <strong>Exemple traductions complexes</strong> comprend une insertion et neuf requêtes : jointures, cause et compléments multiples, croyances et provenance, quantificateurs imbriqués, négation et absence, décisions avec exceptions, valeurs typées et temps verbaux. Chaque requête décrit le texte naturel, sa traduction et le résultat attendu ; les scripts peuvent être exécutés dans n’importe quel ordre. L’annexe de l’agent est générée depuis ce catalogue par <code>npm run build</code> ; elle utilise donc les mêmes scripts autonomes que la console. Les données fictives ne sont pas insérées automatiquement.</p>
+                <p>Le bouton <strong>Cloner</strong> enregistre le code et le mode courants dans une nouvelle ligne, avec un nouvel UUID et un nom disponible (« Nom — copie », « Nom — copie 2 », etc.), puis charge cette copie. Le script d’origine est conservé et le code n’est pas exécuté. Une modification avec <strong>Enregistrer</strong> remplace le nom, le code et le mode des scripts utilisateur en conservant l’UUID ; les exemples d’origine sont protégés. Il n’y a pas d’historique de versions. SQLite crée les index associés à la clé primaire et au nom unique.</p>
             </section>
 
             <section aria-labelledby="agent-calls">
@@ -161,19 +180,19 @@
                 </tbody></table></div>
                 <p>Un index trie les appels par date et identifiant décroissants. L’appel est inscrit avant l’exécution et finalisé après la sortie du processus. Le journal est conservé même si une erreur annule les faits du script. Les requêtes invalides et les refus pour service occupé ne sont pas exécutés et ne créent pas de ligne.</p>
                 <p>L’onglet <a href="/#history">Historique agent</a> propose une liste paginée et le détail de chaque appel. Les API <code>GET /api/agent/calls?limit=25&amp;offset=0</code> et <code>GET /api/agent/calls/:id</code> permettent aussi sa consultation.</p>
-                <p>Le bouton <strong>RAZ</strong> vide les tables de mémoire et cet historique après confirmation. La table <code>saved_scripts</code> est exclue : les scripts enregistrés dans l’interface web sont conservés, avec leurs identifiants, noms, codes, modes et dates. Il appelle <code>POST /api/database/reset</code> avec <code>{"confirm":"RAZ"}</code>. La remise à zéro est atomique et conserve le schéma ; elle est refusée pendant une exécution. Le script chargé, sa sélection et les modifications non enregistrées dans Monaco restent disponibles ; les scripts peuvent être rechargés, modifiés ou exécutés après la RAZ.</p>
+                <p>Le bouton <strong>RAZ</strong> vide les tables de mémoire et cet historique après confirmation. Les trois dictionnaires sont conservés. La table <code>saved_scripts</code> est également exclue : les scripts enregistrés dans l’interface web sont conservés, avec leurs identifiants, noms, codes, modes et dates. Il appelle <code>POST /api/database/reset</code> avec <code>{"confirm":"RAZ"}</code>. La remise à zéro est atomique et conserve le schéma ; elle est refusée pendant une exécution. Le script chargé, sa sélection et les modifications non enregistrées dans Monaco restent disponibles ; les scripts peuvent être rechargés, modifiés ou exécutés après la RAZ.</p>
             </section>
 
             <section aria-labelledby="encoding">
                 <h3 id="encoding">Format JSON des données sémantiques</h3>
                 <p>Les colonnes <code>name</code> et <code>qualifier</code> des compositions et phrases contiennent du texte brut. Les arguments et les objets complets restent encodés en JSON : même un nombre ou un booléen y est stocké comme texte JSON, puis retrouve son type JavaScript à la lecture. Le code et les métadonnées de <code>saved_scripts</code> sont du texte ordinaire.</p>
-                <p>Pour filtrer un nom dans l’onglet Base SQLite, écrire directement <code>WHERE name = 'Personne'</code>. Ce filtre inclut les formes qualifiées ; ajouter <code>AND qualifier IS NULL</code> pour demander uniquement le nom simple, ou <code>AND qualifier = 'très vite'</code> pour un qualificatif précis. Le runtime conserve cette distinction dans les requêtes <code>est</code> et <code>fait</code>.</p>
+                <p>Pour filtrer un nom dans l’onglet Base SQLite, écrire directement <code>WHERE name = 'Personne'</code>. Ce filtre inclut les formes qualifiées ; ajouter <code>AND qualifier IS NULL</code> pour demander uniquement le nom simple, ou <code>AND qualifier = 'très vite'</code> pour un qualificatif précis. Le runtime conserve cette distinction dans les requêtes <code>est</code> et <code>phrase</code>.</p>
                 <p>Les anciennes bases sont converties automatiquement à l’ouverture : le nom et le qualificatif sont extraits du JSON complet, et les index sont actualisés dans une transaction. Le JSON complet conserve le nom d’origine, sous forme de chaîne ou de couple.</p>
                 <div class="storage-table"><table><caption>Marqueurs de sérialisation</caption><thead><tr><th>Valeur JavaScript</th><th>Représentation JSON</th></tr></thead><tbody>
                     <tr><td>Référence</td><td><code>{"$ref":"uuid"}</code></td></tr>
                     <tr><td><code>undefined</code></td><td><code>{"$undefined":true}</code>, distinct de SQL NULL.</td></tr>
                     <tr><td>Composition</td><td><code>{"$composition":[ref,name,of]}</code></td></tr>
-                    <tr><td>Phrase</td><td><code>{"$phrase":[subject,name,complements]}</code></td></tr>
+                    <tr><td>Phrase</td><td><code>["phrase",subject,name,...complements]</code></td></tr>
                     <tr><td>Expression, rôle, qualificatif</td><td>Tableau JSON, par exemple <code>["est",{"$ref":"uuid"},"Personne"]</code>.</td></tr>
                     <tr><td>Valeur primitive</td><td><code>"Alice"</code>, <code>32</code> ou <code>true</code>.</td></tr>
                 </tbody></table></div>
@@ -205,7 +224,7 @@ value    = {"$composition":["Alice","Nom",{"$ref":"uuid-alice"}]}</code></pre>
 
             <section aria-labelledby="queries">
                 <h3 id="queries">Requêtes, transactions et limites du stockage</h3>
-                <p><code>query(select(...))</code> est compilé en SQL paramétré. Les domaines des variables utilisées viennent de <code>refs</code>, <code>phrases</code> ou <code>primitive_values</code> selon le type déclaré ; les conditions <code>est</code> et <code>fait</code> consultent les tables de faits. Les résultats sont décodés en objets et valeurs JavaScript.</p>
+                <p><code>query(select(...))</code> est compilé en SQL paramétré. Les domaines des variables utilisées viennent de <code>refs</code>, <code>phrases</code> ou <code>primitive_values</code> selon le type déclaré ; les conditions <code>est</code> et <code>phrase</code> consultent les tables de faits. Les résultats sont décodés en objets et valeurs JavaScript.</p>
                 <p>Une variable déclarée dans <code>select</code> mais inutilisée dans la condition vaut <code>undefined</code>. Son domaine n’est pas parcouru, même s’il est rempli ; un domaine vide n’empêche donc pas les autres résultats. Par exemple, <code>select({p:"Ref",n:"string"},est(variable("p"),"Personne"))</code> renvoie les personnes avec <code>n: undefined</code>. Une variable masquée par un quantificateur ne lie pas la variable extérieure.</p>
                 <p>Une condition <code>true</code> ne lie aucune variable. Pour lister toutes les chaînes enregistrées, écrire <code>query(select({n:"string"},eq(variable("n"),variable("n"))))</code>. Les variables réellement utilisées et les domaines locaux des quantificateurs conservent leurs conditions habituelles.</p>
                 <p>Le runtime retourne de vrais <code>undefined</code>. Dans le JSON de l’API, les propriétés correspondantes sont encodées <code>{"$undefined":true}</code> pour conserver les colonnes ; la console les affiche comme <code>undefined</code>.</p>

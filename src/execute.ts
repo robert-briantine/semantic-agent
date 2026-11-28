@@ -2,9 +2,9 @@
 import ts from 'typescript';
 import * as api from './structure-langage-runtime';
 
-const names = ['Ref','Phrase','Composition','variable','est','fait','contient','all','exists','and','or','not','implies','eq','select','quantification','query','addMemoryPhrase','addMemoryComposition','memoryRef','memoryRelation','memoryComposition','print'] as const;
+const names = ['Ref','Composition','variable','est','phrase','contient','all','exists','and','or','not','implies','switchCase','eq','select','quantification','query','addMemoryPhrase','addMemoryComposition','deleteReferences','memoryRef','memoryRelation','memoryComposition','print'] as const;
 const functions = new Map<string,any>(names.map(name => [name, api[name]]));
-const constructors = new Set(['Ref', 'Phrase', 'Composition']);
+const constructors = new Set(['Ref', 'Composition']);
 const output:unknown[][] = [];
 functions.set('print', (...args:unknown[]) => { output.push(args); });
 const code = Buffer.from(process.argv[2] || '', 'base64').toString('utf8');
@@ -97,7 +97,7 @@ function call(value:unknown, args:unknown[]):unknown {
     if (data.kind === 'native') {
         if (constructors.has(data.name)) throw new Error('Utiliser new pour construire ' + data.name);
         // Vérifier la primitive réelle, même lorsqu’elle est appelée via un alias ou un paramètre.
-        if (mode === 'read' && data.name.startsWith('addMemory')) throw new Error('Écriture interdite en mode read');
+        if (mode === 'read' && (data.name.startsWith('addMemory') || data.name === 'deleteReferences')) throw new Error('Écriture interdite en mode read');
         return functions.get(data.name)(...args);
     }
     if (++callDepth > 128) { --callDepth; throw new Error('Profondeur maximale des appels dépassée'); }
@@ -206,6 +206,16 @@ function statement(node:ts.Statement, scope:Scope, inFunction:boolean):Completio
         return { value:node.expression ? expr(node.expression, scope) : undefined };
     }
     if (ts.isBlock(node)) return statements(node.statements, new Scope(scope), inFunction);
+    if (ts.isTryStatement(node)) {
+        if (node.catchClause || !node.finallyBlock) return fail(node);
+        let completion:Completion;
+        try { completion = statement(node.tryBlock, scope, inFunction); }
+        finally {
+            const finalCompletion = statement(node.finallyBlock, scope, inFunction);
+            if (finalCompletion) return finalCompletion;
+        }
+        return completion;
+    }
     if (ts.isIfStatement(node)) {
         if (expr(node.expression, scope)) return statement(node.thenStatement, scope, inFunction);
         if (node.elseStatement) return statement(node.elseStatement, scope, inFunction);

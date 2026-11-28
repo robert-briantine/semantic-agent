@@ -1,12 +1,17 @@
 const { build } = require('esbuild');
 const ts = require('typescript');
-const { mkdirSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
+const { mkdirSync, readFileSync, writeFileSync, rmSync, copyFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 
 async function main() {
     const root = resolve(__dirname, '..');
     const editorDir = resolve(root, 'dist/editor');
     mkdirSync(editorDir, { recursive: true });
+    const lexiconDir = resolve(root, 'dist/lexicon');
+    mkdirSync(lexiconDir, { recursive: true });
+    for (const name of ['README.md', 'LICENSE-Lexique.txt', 'README-Lexique.txt']) {
+        copyFileSync(resolve(root, 'src/lexicon', name), resolve(lexiconDir, name));
+    }
 
     // Générer les types depuis la vraie librairie, sans ses implémentations Node.
     const program = ts.createProgram([resolve(root, 'src/structure-langage.ts')], {

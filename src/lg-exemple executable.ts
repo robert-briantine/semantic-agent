@@ -1,610 +1,1563 @@
-import {
-    addMemoryComposition,
-    addMemoryPhrase,
-    Ref,
-    quantification,
-    query,
-    select,
-    and,
-    est,
-    variable,
-    all,
-    implies,
-    fait,
-    Phrase,
-    not,
-    eq,
-    exists,
-    Expression
-} from "./structure-langage-pour-ia"
-
-
-// Tous les hommes sont mortels
-
-addMemoryPhrase(undefined, "pense", quantification([
-    "all", { h2: "Ref" },
-    ["=>",
-        ["est", ["var", "h2"], "Homme"],
-        ["est", ["var", "h2"], "Mortel"]
-    ]
-]))
-
-
-// Il existe des hommes qui sont mortels
-
-const newRef = new Ref()
-addMemoryComposition(newRef, "Homme")
-addMemoryComposition(newRef, "Mortel")
-
-
-// Une voiture roule sur l'autoroute à côté de chez moi
-
-const v = new Ref()
-const a = new Ref()
-const cm = new Ref()
-const moi = new Ref()
-
-addMemoryComposition(v, "Voiture")
-addMemoryComposition(a, ["Autoroute", "à cote"], cm)
-addMemoryComposition(cm, "Habitation", moi)
-
-addMemoryPhrase(v, "roule", ["sur", a])
-
-
-// Jean pense que tous les chats aiment dormir
-
-const p = new Ref()
-const action = new Ref()
-
-addMemoryComposition("Jean", "Nom", p)
-addMemoryComposition(action, "Action")
-addMemoryComposition("dormir", "Nom", action)
-
-addMemoryPhrase(p, "pense", quantification([
-    "all", { c: "Ref" },
-    ["=>",
-        ["est", ["var", "c"], "Chat"],
-        ["fait", ["var", "c"], "aime", action]
-    ]
-]))
-
-
-// Le président de la France est Toto le Buc
-
-const pr = new Ref()
-const pays = new Ref()
-
-addMemoryComposition(pays, "Pays")
-addMemoryComposition("France", "Nom", pays)
-addMemoryComposition(pr, "President", pays)
-addMemoryComposition("Toto le Buc", "Nom", pr)
-
-
-// Toutes les voitures qui roulent sur cette autoroute
-// roulent très vite
-
-const autoroute = new Ref()
-const m = new Ref()
-
-addMemoryComposition(autoroute, "Autoroute")
-
-addMemoryPhrase(m, "pense", quantification([
-    "all", { v: "Ref" },
-    ["=>",
-        ["and",
-            ["est", ["var", "v"], "Voiture"],
-            ["fait", ["var", "v"], "roule", ["sur", autoroute]]
-        ],
-        ["fait", ["var", "v"], ["roule", "très vite"], ["sur", autoroute]]
-    ]
-]))
-
-
-// La majorité des gens ne sont pas racistes
-
-const ensemble = new Ref()
-const type = new Ref()
-
-addMemoryComposition("Personne", "Nom", type)
-addMemoryComposition(ensemble, "Ensemble")
-addMemoryComposition(type, "Type", ensemble)
-addMemoryComposition(ensemble, "Majorité")
-
-addMemoryPhrase(undefined, "pense", quantification([
-    "all", { r: "Ref" },
-    ["=>",
-        ["est", ["var", "r"], "Element", ensemble],
-        ["not",
-            ["est", ["var", "r"], "Raciste"]
-        ]
-    ]
-]))
-
-
-// La plupart des gens ne sont pas racistes
-
-const plupart = new Ref()
-const ensembleBis = new Ref()
-const typeBis = new Ref()
-
-addMemoryComposition("quantificatrice", "Valeur", plupart)
-addMemoryComposition("Plupart", "Nom", plupart)
-
-addMemoryComposition("Personne", "Nom", typeBis)
-addMemoryComposition(ensembleBis, "Ensemble")
-addMemoryComposition(typeBis, "Type", ensembleBis)
-
-addMemoryComposition(
-    plupart,
-    ["Locution", "déterminative"],
-    ensembleBis
-)
-
-addMemoryPhrase(undefined, "pense", quantification([
-    "all", { r: "Ref" },
-    ["=>",
-        ["est", ["var", "r"], "Element", ensembleBis],
-        ["not",
-            ["est", ["var", "r"], "Raciste"]
-        ]
-    ]
-]))
-
-
-// Tous les hommes sont mortels
-
-const proposition = all(
-    { h: "Ref" },
-    implies(
-        est(variable("h"), "Homme"),
-        est(variable("h"), "Mortel")
-    )
-)
-
-addMemoryPhrase(undefined, "pense", proposition)
-
-
-// Jean pense que tous les hommes sont mortels
-
-const jean = new Ref()
-
-addMemoryComposition("Jean", "Nom", jean)
-
-addMemoryPhrase(jean, "pense", proposition)
-
-
-// Socrate est un homme mortel
-
-const socrate = new Ref()
-
-addMemoryComposition("Socrate", "Nom", socrate)
-addMemoryComposition(socrate, "Homme")
-addMemoryComposition(socrate, "Mortel")
-
-
-// Rechercher tous les hommes mortels
-
-const hommesMortels = query(
-    select(
-        { h: "Ref" },
-        and(
-            est(variable("h"), "Homme"),
-            est(variable("h"), "Mortel")
-        )
-    )
-)
-
-console.log(hommesMortels)
-
-
-// Rechercher les individus qui pensent
-// que tous les hommes sont mortels
-
-const croyances = query(
-    select(
-        { p: "Ref" },
-        fait(variable("p"), "pense", proposition)
-    )
-)
-
-console.log(croyances)
-// ======================================================
-// 1. Deux personnes ont des croyances contradictoires
-// ======================================================
-
-
-const paul = new Ref()
-const terre = new Ref()
-
-addMemoryComposition("Jean", "Nom", jean)
-addMemoryComposition("Paul", "Nom", paul)
-addMemoryComposition("Terre", "Nom", terre)
-addMemoryComposition(jean, "Personne")
-addMemoryComposition(paul, "Personne")
-
-// Jean pense que la Terre est ronde
-
-addMemoryPhrase(jean, "pense",
-    est(terre, "Ronde")
-)
-
-// Paul pense que la Terre n'est pas ronde
-
-addMemoryPhrase(paul, "pense",
-    not(est(terre, "Ronde"))
-)
-
-// Rechercher les personnes qui pensent que la Terre est ronde
-
-const croyanceTerre = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "pense",
-            est(terre, "Ronde")
-        )
-    )
-)
-
-
-// ======================================================
-// 2. Une croyance portant sur une autre croyance
-// ======================================================
-
-// Jean pense que Paul croit que la Terre est ronde
-
-addMemoryPhrase(jean, "pense",
-    fait(paul, "croit",
-        est(terre, "Ronde")
-    )
-)
-
-// Rechercher les personnes qui pensent que Paul
-// croit que la Terre est ronde
-
-const croyanceImbriquee = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "pense",
-            fait(paul, "croit",
-                est(terre, "Ronde")
-            )
-        )
-    )
-)
-
-
-// ======================================================
-// 3. Communication d'une information
-// ======================================================
-
-const marie = new Ref()
-const voiture = new Ref()
-
-addMemoryComposition("Marie", "Nom", marie)
-addMemoryComposition(marie, "Personne")
-addMemoryComposition(voiture, "Voiture")
-
-// Marie affirme à Jean que Paul possède une voiture
-
-addMemoryPhrase(marie, "affirme",
-    ["à", jean],
-    fait(paul, "possède", voiture)
-)
-
-// Rechercher qui a affirmé à Jean que Paul
-// possède cette voiture
-
-const sourceInformation = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "affirme",
-            ["à", jean],
-            fait(paul, "possède", voiture)
-        )
-    )
-)
-
-
-// ======================================================
-// 4. Une règle générale portant sur plusieurs individus
-// ======================================================
-// Marie pense que tous les parents aiment leurs enfants
-
-addMemoryPhrase(marie, "pense",
-    all({ p: "Ref", e: "Ref" },
-        implies(
-            and(
-                est(variable("p"), "Parent"),
-                est(variable("e"), "Enfant", variable("p"))
-            ),
-            fait(variable("p"), "aime", variable("e"))
-        )
-    )
-)
-
-// Marie est la mère de Luc
-
-const luc = new Ref()
-
-addMemoryComposition("Luc", "Nom", luc)
-addMemoryComposition(luc, "Personne")
-addMemoryComposition(luc, "Enfant", marie)
-addMemoryComposition(marie, "Mère", luc)
-
-// Rechercher toutes les relations parent-enfant
-
-const parentsEnfants = query(
-    select({ p: "Ref", e: "Ref" },
-        est(variable("e"), "Enfant", variable("p"))
-    )
-)
-
-
-// ======================================================
-// 5. Quantifications imbriquées
-// ======================================================
-
-// Jean pense que chaque personne aime au moins une personne
-
-const existenceAmour = [
-    "all", { p: "Ref" },
-    implies(
-        est(variable("p"), "Personne"),
-        [
-            "exists", { e: "Ref" },
-            and(
-                est(variable("e"), "Personne"),
-                fait(variable("p"), "aime", variable("e"))
-            )
-        ]
-    )
-] satisfies Expression
-
-addMemoryPhrase(jean, "pense", existenceAmour)
-
-// Rechercher les personnes qui partagent cette croyance
-
-const croyanceAmour = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "pense", existenceAmour)
-    )
-)
-
-
-// ======================================================
-// 6. Raisonnement sur les intentions
-// ======================================================
-
-const maison = new Ref()
-
-addMemoryComposition(maison, "Maison")
-
-// Paul souhaite acheter une maison,
-// mais Jean souhaite que Paul ne l'achète pas
-
-addMemoryPhrase(paul, "souhaite",
-    fait(paul, "acheter", maison)
-)
-
-addMemoryPhrase(jean, "souhaite",
-    not(fait(paul, "acheter", maison))
-)
-
-// Rechercher les personnes qui souhaitent
-// que Paul n'achète pas cette maison
-
-const oppositionAchat = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "souhaite",
-            not(fait(paul, "acheter", maison))
-        )
-    )
-)
-
-
-// ======================================================
-// 7. Relations entre entreprises et employés
-// ======================================================
-
-const entreprise = new Ref()
-const informatique = new Ref()
-const comptabilite = new Ref()
-
-addMemoryComposition(entreprise, "Entreprise")
-addMemoryComposition("Entreprise ABC", "Nom", entreprise)
-
-addMemoryComposition(informatique, "Service", entreprise)
-addMemoryComposition(comptabilite, "Service", entreprise)
-
-addMemoryComposition("Informatique", "Nom", informatique)
-addMemoryComposition("Comptabilité", "Nom", comptabilite)
-
-addMemoryComposition(jean, "Employé", entreprise)
-addMemoryComposition(paul, "Employé", entreprise)
-addMemoryComposition(marie, "Employé", entreprise)
-
-addMemoryPhrase(jean, "travaille", ["dans", informatique])
-addMemoryPhrase(paul, "travaille", ["dans", informatique])
-addMemoryPhrase(marie, "travaille", ["dans", comptabilite])
-
-// Rechercher les personnes travaillant dans le même service
-
-const collegues = query(
-    select({ p1: "Ref", p2: "Ref", s: "Ref" },
-        and(
-            est(variable("s"), "Service", entreprise),
-            fait(variable("p1"), "travaille",
-                ["dans", variable("s")]
-            ),
-            fait(variable("p2"), "travaille",
-                ["dans", variable("s")]
-            ),
-            not(eq(variable("p1"), variable("p2")))
-        )
-    )
-)
-
-
-// ======================================================
-// 8. Rechercher une relation indirecte
-// ======================================================
-
-const directeur = new Ref()
-const responsable = new Ref()
-
-addMemoryComposition(directeur, "Personne")
-addMemoryComposition(responsable, "Personne")
-
-addMemoryPhrase(directeur, "dirige", responsable)
-addMemoryPhrase(responsable, "dirige", jean)
-
-// Rechercher les personnes qui dirigent indirectement Jean
-
-const hierarchie = query(
-    select({ p: "Ref" },
-        exists({ i: "Ref" },
-            and(
-                fait(variable("p"), "dirige", variable("i")),
-                fait(variable("i"), "dirige", jean)
-            )
-        )
-    )
-)
-
-
-// ======================================================
-// 9. Rechercher les connaissances contradictoires
-// ======================================================
-
-// Rechercher les couples de personnes ayant
-// des croyances opposées sur la forme de la Terre
-
-const contradictions = query(
-    select({ p1: "Ref", p2: "Ref" },
-        and(
-            fait(variable("p1"), "pense",
-                est(terre, "Ronde")
-            ),
-            fait(variable("p2"), "pense",
-                not(est(terre, "Ronde"))
-            ),
-            not(eq(variable("p1"), variable("p2")))
-        )
-    )
-)
-
-
-// ======================================================
-// 10. Une personne ignore ce qu'une autre personne sait
-// ======================================================
-
-const document = new Ref()
-
-addMemoryComposition(document, "Document")
-addMemoryComposition(document, "Confidentiel")
-
-// Paul sait que le document est confidentiel
-
-addMemoryPhrase(paul, "sait",
-    est(document, "Confidentiel")
-)
-
-// Jean ignore que Paul sait que le document est confidentiel
-
-addMemoryPhrase(jean, "ignore",
-    fait(paul, "sait",
-        est(document, "Confidentiel")
-    )
-)
-
-// Rechercher les personnes qui ignorent cette connaissance
-
-const ignorance = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "ignore",
-            fait(paul, "sait",
-                est(document, "Confidentiel")
-            )
-        )
-    )
-)
-
-
-// ======================================================
-// 11. Une personne promet quelque chose sous condition
-// ======================================================
-
-const examen = new Ref()
-const ordinateur = new Ref()
-
-addMemoryComposition(examen, "Examen")
-addMemoryComposition(ordinateur, "Ordinateur")
-
-// Marie promet à Luc de lui offrir un ordinateur
-// s'il réussit son examen
-
-addMemoryPhrase(marie, "promet",
-    ["à", luc],
-    implies(
-        fait(luc, "réussit", examen),
-        fait(marie, "offrir", ordinateur, ["à", luc])
-    )
-)
-
-// Rechercher qui a fait cette promesse à Luc
-
-const promesses = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "promet",
-            ["à", luc],
-            implies(
-                fait(luc, "réussit", examen),
-                fait(variable("p"), "offrir",
-                    ordinateur, ["à", luc]
-                )
-            )
-        )
-    )
-)
-
-
-// ======================================================
-// 12. Une personne interprète les motivations d'une autre
-// ======================================================
-
-// Jean pense que Paul souhaite acheter une maison
-// parce qu'il souhaite impressionner Marie
-
-addMemoryPhrase(jean, "pense",
-    new Phrase(
-        paul,
-        "souhaite",
-        [
-            fait(paul, "acheter", maison),
-            ["parce que",
-                fait(paul, "souhaite",
-                    fait(paul, "impressionner", marie)
-                )
-            ]
-        ]
-    )
-)
-
-// Rechercher les personnes qui attribuent
-// cette motivation à Paul
-
-const motivations = query(
-    select({ p: "Ref" },
-        fait(variable("p"), "pense",
-            new Phrase(
-                paul,
-                "souhaite",
-                [
-                    fait(paul, "acheter", maison),
-                    ["parce que",
-                        fait(paul, "souhaite",
-                            fait(paul, "impressionner", marie)
-                        )
-                    ]
-                ]
-            )
-        )
-    )
-)
+// Fichier généré depuis src/example-scripts.ts par scripts/build-examples.cjs.
+// Chaque exemple prépare ses données, affiche son résultat puis supprime ses données.
+// Données fictives : choisir un bloc et adapter la traduction à la demande réelle.
+import { Ref, Composition, variable, est, phrase, contient, all, exists, and, or, not, implies, switchCase, eq, select, query, addMemoryPhrase, addMemoryComposition, deleteReferences, print } from "./structure-langage-pour-ia";
+
+// Exemple switchCase — 1. Insertion
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Alice, Bob, Chloé et Denis.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const alice = new Ref();
+const bob = new Ref();
+const chloe = new Ref();
+const denis = new Ref();
+try {
+    addMemoryComposition(alice, "exemple", jeu);
+    addMemoryComposition(alice, "personne");
+    addMemoryComposition("Alice", "Nom", alice);
+    addMemoryComposition(bob, "exemple", jeu);
+    addMemoryComposition(bob, "personne");
+    addMemoryComposition("Bob", "Nom", bob);
+    addMemoryComposition(chloe, "exemple", jeu);
+    addMemoryComposition(chloe, "personne");
+    addMemoryComposition("Chloé", "Nom", chloe);
+    addMemoryComposition(denis, "exemple", jeu);
+    addMemoryComposition(denis, "personne");
+    addMemoryComposition("Denis", "Nom", denis);
+    addMemoryComposition(alice, "Actif");
+    addMemoryComposition(alice, "exclusion");
+    addMemoryComposition(bob, "Actif");
+    addMemoryComposition(chloe, "Invité");
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, alice, bob, chloe, denis]);
+}
+}
+
+// Exemple switchCase — 2. Requête
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Bob et Chloé (l'ordre des lignes peut varier).
+// Alice est exclue dès le premier cas : false ne passe pas au cas suivant.
+// Chloé et Denis atteignent le défaut : seul le statut Invité les départage.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const alice = new Ref();
+const bob = new Ref();
+const chloe = new Ref();
+const denis = new Ref();
+try {
+    addMemoryComposition(alice, "exemple", jeu);
+    addMemoryComposition(alice, "personne");
+    addMemoryComposition("Alice", "Nom", alice);
+    addMemoryComposition(bob, "exemple", jeu);
+    addMemoryComposition(bob, "personne");
+    addMemoryComposition("Bob", "Nom", bob);
+    addMemoryComposition(chloe, "exemple", jeu);
+    addMemoryComposition(chloe, "personne");
+    addMemoryComposition("Chloé", "Nom", chloe);
+    addMemoryComposition(denis, "exemple", jeu);
+    addMemoryComposition(denis, "personne");
+    addMemoryComposition("Denis", "Nom", denis);
+    addMemoryComposition(alice, "Actif");
+    addMemoryComposition(alice, "exclusion");
+    addMemoryComposition(bob, "Actif");
+    addMemoryComposition(chloe, "Invité");
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), switchCase([
+        implies(est(variable("p"), "exclusion"), false),
+        implies(est(variable("p"), "Actif"), true)
+    ], est(variable("p"), "Invité")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, alice, bob, chloe, denis]);
+}
+}
+
+// Exemple expressions — 00. Insertion
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Source fictive : Ana est active et responsable, Bruno actif et membre, Clara invitée.
+// Traductions : « Ana salue. » et « Ana aide Bruno. »
+// Source : « Bruno envoie un rapport à Clara. »
+// Le rapport est direct ; seule la préposition « à » introduit le destinataire.
+// Source : « Ana pose le rapport sur une table. »
+// Source : « Ana prépare le rapport pour Clara avec Bruno. »
+// Source : « Bruno transmet le rapport depuis un bureau. »
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), true)))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 01. Booléens
+// Mode : read. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Sans données requises : true renvoie [{}] et false renvoie [].
+print(query(select({}, true)));
+print(query(select({}, false)));
+}
+
+// Exemple expressions — 02. est — compositions
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Ana et Bruno, qui sont Actif. Nom relie une chaîne à une personne.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), est(variable("p"), "Actif"))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 03. phrase — phrases
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Ana, qui salue (phrase sans complément).
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), phrase(variable("p"), "salue"))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 04. eq — égalité
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultats attendus : Ana, puis [{}] (42 = 42), puis [] (false ≠ true).
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), eq(variable("nom"), "Ana"))))));
+    print(query(select({}, eq(42, 42))));
+    print(query(select({}, eq(false, true))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 05. not — négation
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Clara. not est vrai si le phrase Actif est absent (monde fermé).
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), not(est(variable("p"), "Actif")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 06. and — conjonction
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Ana. Les deux conditions doivent être vraies.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), and(est(variable("p"), "Actif"), est(variable("p"), "Responsable")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 07. or — disjonction
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Ana et Clara. Au moins une des deux conditions doit être vraie.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), or(est(variable("p"), "Responsable"), est(variable("p"), "Invité")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 08. implies — implication
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Ana et Clara. Actif implique Responsable ; Clara est retenue car non active.
+// Une implication teste une proposition ; elle ne crée aucun phrase en mémoire.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), implies(est(variable("p"), "Actif"), est(variable("p"), "Responsable")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 09. contient — compléments
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Question : « Qui envoie un rapport, et à qui ? » Résultat : Bruno, le rapport et Clara.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string", objet: "string", destinataire: "string" }, exists({ p: "Ref", c: "complements", rapport: "Ref", personne: "Ref" }, and(
+        est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")),
+        phrase(variable("p"), "envoie", variable("c")), contient(variable("c"), variable("rapport")),
+        est(variable("rapport"), "Rapport"), est(variable("objet"), "Nom", variable("rapport")),
+        contient(variable("c"), ["à", variable("personne")]), est(variable("destinataire"), "Nom", variable("personne"))
+    )))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 10. all — pour tout
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultats attendus : [{}] (tous actifs ou invités), puis [] (Clara n’est pas active).
+// p est une variable locale au quantificateur. Sur un domaine vide, all est vrai.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({}, all({ p: "Ref" }, implies(est(variable("p"), "exemple", jeu), or(est(variable("p"), "Actif"), est(variable("p"), "Invité")))))));
+    print(query(select({}, all({ p: "Ref" }, implies(est(variable("p"), "exemple", jeu), est(variable("p"), "Actif"))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 11. exists — il existe
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Résultat attendu : Ana, qui aide au moins une autre personne de l’exemple.
+// autre est locale à exists : elle n’apparaît pas dans les colonnes du résultat.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ autre: "Ref" }, and(est(variable("autre"), "exemple", jeu), phrase(variable("p"), "aide", variable("autre")))))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple expressions — 12. Prépositions — sur, pour, avec, depuis
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Questions : « Qui pose un rapport sur une table ? Qui le prépare pour Clara avec Bruno ? Qui le transmet depuis un bureau ? » Résultats : Ana, Ana, Bruno.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const anaExemple = new Ref();
+const brunoExemple = new Ref();
+const claraExemple = new Ref();
+const objetExemple = new Ref();
+const tableExemple = new Ref();
+const bureauExemple = new Ref();
+try {
+    addMemoryComposition(anaExemple, "exemple", jeu);
+    addMemoryComposition(anaExemple, "Responsable");
+    addMemoryComposition("Ana", "Nom", anaExemple);
+    addMemoryComposition(brunoExemple, "exemple", jeu);
+    addMemoryComposition(brunoExemple, "Membre");
+    addMemoryComposition("Bruno", "Nom", brunoExemple);
+    addMemoryComposition(claraExemple, "exemple", jeu);
+    addMemoryComposition(claraExemple, "Invité");
+    addMemoryComposition("Clara", "Nom", claraExemple);
+    addMemoryComposition(anaExemple, "Actif");
+    addMemoryComposition(brunoExemple, "Actif");
+    addMemoryComposition(objetExemple, "Rapport");
+    addMemoryComposition("Rapport pédagogique", "Nom", objetExemple);
+    addMemoryComposition(tableExemple, "Table");
+    addMemoryComposition("Table pédagogique", "Nom", tableExemple);
+    addMemoryComposition(bureauExemple, "Bureau");
+    addMemoryComposition("Bureau pédagogique", "Nom", bureauExemple);
+    addMemoryPhrase(anaExemple, "salue");
+    addMemoryPhrase(anaExemple, "aide", brunoExemple);
+    addMemoryPhrase(brunoExemple, "envoie", objetExemple, ["à", claraExemple]);
+    addMemoryPhrase(anaExemple, "pose", objetExemple, ["sur", tableExemple]);
+    addMemoryPhrase(anaExemple, "prépare", objetExemple, ["pour", claraExemple], ["avec", brunoExemple]);
+    addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", table: "Ref" }, and(est(variable("rapport"), "Rapport"), est(variable("table"), "Table"), phrase(variable("p"), "pose", variable("rapport"), ["sur", variable("table")]))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", destinataire: "Ref", compagnon: "Ref" }, and(est(variable("rapport"), "Rapport"), est("Clara", "Nom", variable("destinataire")), est("Bruno", "Nom", variable("compagnon")), phrase(variable("p"), "prépare", variable("rapport"), ["pour", variable("destinataire")], ["avec", variable("compagnon")]))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", bureau: "Ref" }, and(est(variable("rapport"), "Rapport"), est(variable("bureau"), "Bureau"), phrase(variable("p"), "transmet", variable("rapport"), ["depuis", variable("bureau")]))))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
+}
+}
+
+// Exemple traductions complexes — 00. Insertion
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// « Nora est responsable ; Omar et Léa sont collaborateurs ; Zoé et Hugo sont invités. »
+// « Zoé est exclue. Omar a 42 ans, aucun retard et n'est pas disponible. Léa est disponible et son retard vaut 3. »
+// « Nora dirige Omar et Léa. Omar rédige Avancement, qui concerne Atlas.
+// Léa rédige Budget, qui concerne Boréal. Nora valide Avancement. »
+// « Omar participe au projet Atlas ; Léa participe au projet Boréal. » au → à.
+// « Nora préparait Budget. Elle prépare maintenant Avancement pour Omar,
+// avec Léa, depuis le bureau de Lyon, parce qu'Omar demande Avancement. »
+// Le rapport est direct ; les liens naturels sont conservés ; le temps verbal reste distinct.
+// « Le document Pilotage rapporte qu'Omar pense que Nora valide Budget,
+// tandis que Zoé affirme que Nora ne valide pas Budget. »
+// Conserver auteur et provenance. Ces contenus ne deviennent pas des faits indépendants.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 01. Jointures et relatives
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Qui dirige une personne qui rédige un rapport concernant le projet Atlas ?
+// Traduction : Les deux relatives partagent leurs références : responsable → collaborateur → rapport → projet.
+// Résultat attendu : Nora.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), exists({ collaborateur: "Ref", rapport: "Ref" }, and(phrase(variable("p"), "dirige", variable("collaborateur")), phrase(variable("collaborateur"), "rédige", variable("rapport")), est(variable("rapport"), "rapport"), phrase(variable("rapport"), "concerne", atlas))))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 02. Compléments multiples et cause
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Qui prépare Avancement pour Omar, avec Léa, depuis le bureau de Lyon, parce qu’Omar le demande ? La demande est-elle aussi mémorisée séparément ?
+// Traduction : Lier la liste complète puis filtrer chaque complément. La cause est une proposition imbriquée.
+// Résultat attendu : Nora, puis [] : la demande imbriquée est stockée dans son contexte, sans affirmation indépendante.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    const rapport = avancement;
+    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "prépare", variable("c")), contient(variable("c"), rapport), contient(variable("c"), ["pour", omar]), contient(variable("c"), ["avec", lea]), contient(variable("c"), ["depuis", bureau]), contient(variable("c"), ["parce que", phrase(omar, "demande", rapport)]))))));
+    print(query(select({}, phrase(omar, "demande", rapport))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 03. Croyances et provenance
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : D’après Pilotage, qui pense que Nora valide Budget ? Qui affirme le contraire ? La validation est-elle établie ?
+// Traduction : Chercher les contenus attribués, la négation et la Ref du document ; ne pas confondre croyance et phrase.
+// Résultat attendu : Omar, puis Zoé, puis [] pour la validation indépendante.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "pense", variable("c")), contient(variable("c"), phrase(nora, "valide", budget)), contient(variable("c"), ["dans", document]))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "affirme", variable("c")), contient(variable("c"), not(phrase(nora, "valide", budget))), contient(variable("c"), ["dans", document]))))));
+    print(query(select({}, phrase(nora, "valide", budget))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 04. Tous les collaborateurs ou un seul
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Quels responsables valident tous les rapports de tous leurs collaborateurs ? Lesquels ont au moins un collaborateur dont tous les rapports sont validés ?
+// Traduction : Placer exists et all à la bonne portée ; exiger un collaborateur et un rapport pour éviter une vérité sur un domaine vide.
+// Résultat attendu : [], puis Nora : le rapport d’Omar est validé, celui de Léa ne l’est pas.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), and(est(variable("p"), "responsable"), exists({ c: "Ref", r: "Ref" }, and(est(variable("c"), "collaborateur"), est(variable("r"), "rapport"), phrase(variable("p"), "dirige", variable("c")), phrase(variable("c"), "rédige", variable("r")))), all({ c: "Ref", r: "Ref" }, implies(and(est(variable("c"), "collaborateur"), est(variable("r"), "rapport"), phrase(variable("p"), "dirige", variable("c")), phrase(variable("c"), "rédige", variable("r"))), phrase(variable("p"), "valide", variable("r"))))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), and(est(variable("p"), "responsable"), exists({ c: "Ref" }, and(est(variable("c"), "collaborateur"), phrase(variable("p"), "dirige", variable("c")), exists({ r: "Ref" }, and(est(variable("r"), "rapport"), phrase(variable("c"), "rédige", variable("r")))), all({ r: "Ref" }, implies(and(est(variable("r"), "rapport"), phrase(variable("c"), "rédige", variable("r"))), phrase(variable("p"), "valide", variable("r"))))))))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 05. Portée de pour tout et il existe
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Chaque collaborateur participe-t-il à un projet ? Existe-t-il un même projet auquel tous participent ?
+// Traduction : Chaque personne peut avoir son propre projet (all puis exists), ce qui diffère d’un projet partagé (exists puis all).
+// Résultat attendu : [{}], puis [] : Omar participe à Atlas et Léa à Boréal.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({}, and(exists({ c: "Ref" }, and(est(variable("c"), "exemple", jeu), est(variable("c"), "collaborateur"))), all({ c: "Ref" }, implies(and(est(variable("c"), "exemple", jeu), est(variable("c"), "collaborateur")), exists({ projet: "Ref" }, and(est(variable("projet"), "projet"), phrase(variable("c"), "participe", ["à", variable("projet")])))))))));
+    print(query(select({}, exists({ projet: "Ref" }, and(est(variable("projet"), "projet"), all({ c: "Ref" }, implies(and(est(variable("c"), "exemple", jeu), est(variable("c"), "collaborateur")), phrase(variable("c"), "participe", ["à", variable("projet")]))))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 06. Absence et négation attribuée
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Quels rapports n’ont pas de validation enregistrée par Nora ? Qui affirme que Nora ne valide pas Budget ?
+// Traduction : not applique le monde fermé ; l’affirmation négative de Zoé est un autre phrase, attribué à son auteur.
+// Résultat attendu : Budget, puis Zoé. L’absence de validation ne prouve pas une négation dans le monde réel.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ rapport: "Ref" }, and(est(variable("rapport"), "exemple", jeu), est(variable("rapport"), "rapport"), est(variable("nom"), "nom", variable("rapport")), not(phrase(nora, "valide", variable("rapport"))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "affirme", not(phrase(nora, "valide", budget)), ["dans", document]))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 07. Décision avec exceptions prioritaires
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Les exclus sont refusés. Les responsables sont acceptés. Les collaborateurs doivent être disponibles et sans retard. Sinon seuls les invités sont acceptés.
+// Traduction : L’exclusion est le premier cas ; un résultat false arrête le switch. Le défaut traite les invités.
+// Résultat attendu : Hugo et Nora. Zoé est exclue ; Omar est indisponible ; Léa a un retard.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), switchCase([
+        implies(est(variable("p"), "exclusion"), false),
+        implies(est(variable("p"), "responsable"), true),
+        implies(est(variable("p"), "collaborateur"), and(est(true, "disponibilité", variable("p")), est(0, "retard", variable("p"))))
+    ], est(variable("p"), "invité")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 08. Propriétés typées, zéro et false
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Qui a 42 ans, zéro retard et une disponibilité égale à false ?
+// Traduction : Les chaînes descriptives et valeurs primitives sont des compositions ; zéro et false sont des valeurs, pas des absences.
+// Résultat attendu : Omar avec âge 42, retard 0 et disponibilité false.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string", age: "number", retard: "number", disponible: "boolean" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), est(variable("age"), "âge", variable("p")), eq(variable("age"), 42), est(variable("retard"), "retard", variable("p")), eq(variable("retard"), 0), est(variable("disponible"), "disponibilité", variable("p")), eq(variable("disponible"), false))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
+
+// Exemple traductions complexes — 09. Conserver le temps verbal
+// Mode : write. Chaque bloc représente un appel indépendant.
+{
+// Script autonome et idempotent : aucune préparation préalable.
+// Texte naturel : Quel rapport Nora préparait-elle ? Quel rapport prépare-t-elle maintenant ?
+// Traduction : Conserver préparait et prépare. Les noms de prédicats sont comparés exactement, sans changement de temps implicite.
+// Résultat attendu : Budget pour préparait, puis Avancement pour prépare.
+// Le jeu privé isole la démonstration des données déjà présentes.
+const jeu = new Ref();
+const nora = new Ref();
+const omar = new Ref();
+const lea = new Ref();
+const zoe = new Ref();
+const hugo = new Ref();
+const atlas = new Ref();
+const boreal = new Ref();
+const avancement = new Ref();
+const budget = new Ref();
+const bureau = new Ref();
+const document = new Ref();
+try {
+    addMemoryComposition(nora, "exemple", jeu);
+    addMemoryComposition(nora, "personne");
+    addMemoryComposition("Nora", "nom", nora);
+    addMemoryComposition(omar, "exemple", jeu);
+    addMemoryComposition(omar, "personne");
+    addMemoryComposition("Omar", "nom", omar);
+    addMemoryComposition(lea, "exemple", jeu);
+    addMemoryComposition(lea, "personne");
+    addMemoryComposition("Léa", "nom", lea);
+    addMemoryComposition(zoe, "exemple", jeu);
+    addMemoryComposition(zoe, "personne");
+    addMemoryComposition("Zoé", "nom", zoe);
+    addMemoryComposition(hugo, "exemple", jeu);
+    addMemoryComposition(hugo, "personne");
+    addMemoryComposition("Hugo", "nom", hugo);
+    addMemoryComposition(nora, "responsable");
+    addMemoryComposition(omar, "collaborateur");
+    addMemoryComposition(lea, "collaborateur");
+    addMemoryComposition(zoe, "invité");
+    addMemoryComposition(hugo, "invité");
+    addMemoryComposition(zoe, "exclusion");
+    addMemoryComposition(42, "âge", omar);
+    addMemoryComposition(0, "retard", omar);
+    addMemoryComposition(false, "disponibilité", omar);
+    addMemoryComposition(3, "retard", lea);
+    addMemoryComposition(true, "disponibilité", lea);
+    addMemoryComposition(atlas, "exemple", jeu);
+    addMemoryComposition(atlas, "projet");
+    addMemoryComposition("Atlas", "nom", atlas);
+    addMemoryComposition(boreal, "exemple", jeu);
+    addMemoryComposition(boreal, "projet");
+    addMemoryComposition("Boréal", "nom", boreal);
+    addMemoryComposition(avancement, "exemple", jeu);
+    addMemoryComposition(avancement, "rapport");
+    addMemoryComposition("Avancement", "nom", avancement);
+    addMemoryComposition(budget, "exemple", jeu);
+    addMemoryComposition(budget, "rapport");
+    addMemoryComposition("Budget", "nom", budget);
+    addMemoryComposition(bureau, "exemple", jeu);
+    addMemoryComposition(bureau, "bureau");
+    addMemoryComposition("Lyon", "nom", bureau);
+    addMemoryComposition(document, "exemple", jeu);
+    addMemoryComposition(document, "document");
+    addMemoryComposition("Pilotage", "nom", document);
+    addMemoryPhrase(nora, "dirige", omar);
+    addMemoryPhrase(nora, "dirige", lea);
+    addMemoryPhrase(omar, "rédige", avancement);
+    addMemoryPhrase(lea, "rédige", budget);
+    addMemoryPhrase(avancement, "concerne", atlas);
+    addMemoryPhrase(budget, "concerne", boreal);
+    addMemoryPhrase(nora, "valide", avancement);
+    addMemoryPhrase(omar, "participe", ["à", atlas]);
+    addMemoryPhrase(lea, "participe", ["à", boreal]);
+    addMemoryPhrase(nora, "préparait", budget);
+    addMemoryPhrase(nora, "prépare", avancement, ["pour", omar], ["avec", lea], ["depuis", bureau],
+        ["parce que", phrase(omar, "demande", avancement)]);
+    addMemoryPhrase(omar, "pense", phrase(nora, "valide", budget), ["dans", document]);
+    addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
+
+    // Afficher le résultat avant de nettoyer.
+    print(query(select({ nom: "string" }, exists({ rapport: "Ref" }, and(est(variable("rapport"), "rapport"), est(variable("nom"), "nom", variable("rapport")), phrase(nora, "préparait", variable("rapport")))))));
+    print(query(select({ nom: "string" }, exists({ rapport: "Ref", c: "complements" }, and(est(variable("rapport"), "rapport"), est(variable("nom"), "nom", variable("rapport")), phrase(nora, "prépare", variable("c")), contient(variable("c"), variable("rapport")))))));
+} finally {
+    // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
+    deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
+}
+}
