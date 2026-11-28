@@ -65,10 +65,13 @@
                     <tr><td><code>name</code></td><td>TEXT, NOT NULL</td><td>Nom commun en texte brut, par exemple <code>Nom</code>, sans guillemets JSON.</td></tr>
                     <tr><td><code>qualifier</code></td><td>TEXT, nullable</td><td>Qualificatif en texte brut, ou SQL NULL si le nom est simple.</td></tr>
                     <tr><td><code>of_value</code></td><td>TEXT, NOT NULL</td><td>Argument <code>of</code> sérialisé ; <code>{"$undefined":true}</code> lorsqu’il est absent.</td></tr>
-                    <tr><td><code>value</code></td><td>TEXT, NOT NULL</td><td>Composition complète au format <code>{"$composition":[ref,name,of]}</code>.</td></tr>
+                    <tr><td><code>value</code></td><td>TEXT, NOT NULL</td><td>Tuple complet au format <code>["composition",ref,name,of?]</code>.</td></tr>
+                    <tr><td><code>owner_type</code></td><td>TEXT, nullable</td><td>SQL NULL pour une affirmation indépendante ; <code>composition</code> ou <code>phrase</code> pour un contenu imbriqué.</td></tr>
+                    <tr><td><code>owner_id</code></td><td>INTEGER, nullable</td><td>Identifiant du fait contenant, ou SQL NULL pour une affirmation indépendante.</td></tr>
                 </tbody></table></div>
-                <p>Les colonnes séparées permettent de rechercher les faits avec <code>est(...)</code>. La colonne <code>value</code> permet de reconstruire un objet <code>Composition</code>.</p>
-                <p>Index : <code>comp_lookup(name, ref, of_value, qualifier)</code> et <code>comp_reverse(name, of_value, ref, qualifier)</code>.</p>
+                <p>Les colonnes séparées permettent de rechercher les faits avec <code>composition(...)</code>. La colonne <code>value</code> conserve le tuple <code>Composition</code>. Le helper <code>composition(ref, name, of?)</code> remplace la classe et l’ancien helper <code>est</code>.</p>
+                <p>Les compositions imbriquées sont également stockées : <code>owner_type</code> et <code>owner_id</code> désignent leur contenant (<code>composition</code> ou <code>phrase</code>), et valent SQL NULL pour une affirmation indépendante. Les conditions <code>composition(...)</code> et <code>memoryComposition()</code> ne considèrent que les affirmations indépendantes ; le domaine <code>"Composition"</code> inclut tous les tuples. Une suppression du contenant nettoie les lignes dépendantes. Les anciennes représentations sont migrées en conservant les identifiants et les contextes.</p>
+                <p>Index : <code>comp_lookup(name, ref, of_value, qualifier)</code>, <code>comp_reverse(name, of_value, ref, qualifier)</code> et <code>composition_owner(owner_type, owner_id)</code>.</p>
             </section>
 
             <section aria-labelledby="phrases">
@@ -186,14 +189,14 @@ SELECT mot, nature FROM lexique_prepositions ORDER BY mot;</code></pre>
             <section aria-labelledby="encoding">
                 <h3 id="encoding">Format JSON des données sémantiques</h3>
                 <p>Les colonnes <code>name</code> et <code>qualifier</code> des compositions et phrases contiennent du texte brut. Les arguments et les objets complets restent encodés en JSON : même un nombre ou un booléen y est stocké comme texte JSON, puis retrouve son type JavaScript à la lecture. Le code et les métadonnées de <code>saved_scripts</code> sont du texte ordinaire.</p>
-                <p>Pour filtrer un nom dans l’onglet Base SQLite, écrire directement <code>WHERE name = 'Personne'</code>. Ce filtre inclut les formes qualifiées ; ajouter <code>AND qualifier IS NULL</code> pour demander uniquement le nom simple, ou <code>AND qualifier = 'très vite'</code> pour un qualificatif précis. Le runtime conserve cette distinction dans les requêtes <code>est</code> et <code>phrase</code>.</p>
+                <p>Pour filtrer un nom dans l’onglet Base SQLite, écrire directement <code>WHERE name = 'Personne'</code>. Ce filtre inclut les formes qualifiées ; ajouter <code>AND qualifier IS NULL</code> pour demander uniquement le nom simple, ou <code>AND qualifier = 'très vite'</code> pour un qualificatif précis. Le runtime conserve cette distinction dans les requêtes <code>composition</code> et <code>phrase</code>.</p>
                 <p>Les anciennes bases sont converties automatiquement à l’ouverture : le nom et le qualificatif sont extraits du JSON complet, et les index sont actualisés dans une transaction. Le JSON complet conserve le nom d’origine, sous forme de chaîne ou de couple.</p>
                 <div class="storage-table"><table><caption>Marqueurs de sérialisation</caption><thead><tr><th>Valeur JavaScript</th><th>Représentation JSON</th></tr></thead><tbody>
                     <tr><td>Référence</td><td><code>{"$ref":"uuid"}</code></td></tr>
                     <tr><td><code>undefined</code></td><td><code>{"$undefined":true}</code>, distinct de SQL NULL.</td></tr>
-                    <tr><td>Composition</td><td><code>{"$composition":[ref,name,of]}</code></td></tr>
+                    <tr><td>Composition</td><td><code>["composition",ref,name,of?]</code></td></tr>
                     <tr><td>Phrase</td><td><code>["phrase",subject,name,...complements]</code></td></tr>
-                    <tr><td>Expression, rôle, qualificatif</td><td>Tableau JSON, par exemple <code>["est",{"$ref":"uuid"},"Personne"]</code>.</td></tr>
+                    <tr><td>Expression, rôle, qualificatif</td><td>Tableau JSON, par exemple <code>["composition",{"$ref":"uuid"},"Personne"]</code>.</td></tr>
                     <tr><td>Valeur primitive</td><td><code>"Alice"</code>, <code>32</code> ou <code>true</code>.</td></tr>
                 </tbody></table></div>
                 <p>Les liens sémantiques entre faits passent par les références encodées. <code>Complement.idPhrase</code> déclare une clé étrangère vers <code>phrases.id</code> ; un déclencheur assure aussi son nettoyage. Les noms et les listes complètes de compléments sont comparés structurellement ; leur ordre et leurs qualificatifs comptent.</p>
@@ -213,19 +216,19 @@ addMemoryPhrase(alice, "dort");</code></pre>
 name     = Nom
 qualifier = NULL
 of_value = {"$ref":"uuid-alice"}
-value    = {"$composition":["Alice","Nom",{"$ref":"uuid-alice"}]}</code></pre>
+value    = ["composition","Alice","Nom",{"$ref":"uuid-alice"}]</code></pre>
                 <p>Le nom et l’âge se recherchent ensuite sans connaître les tables :</p>
                 <pre><code>print(query(select({ p: "Ref", age: "number" }, and(
-    est("Alice", "Nom", variable("p")),
-    est(variable("age"), "Age", variable("p"))
+    composition("Alice", "Nom", variable("p")),
+    composition(variable("age"), "Age", variable("p"))
 ))));</code></pre>
                 <p>Réexécuter le script de création génère une nouvelle identité. Pour enrichir une personne existante, retrouver d’abord sa référence et vérifier qu’il s’agit de la bonne entité.</p>
             </section>
 
             <section aria-labelledby="queries">
                 <h3 id="queries">Requêtes, transactions et limites du stockage</h3>
-                <p><code>query(select(...))</code> est compilé en SQL paramétré. Les domaines des variables utilisées viennent de <code>refs</code>, <code>phrases</code> ou <code>primitive_values</code> selon le type déclaré ; les conditions <code>est</code> et <code>phrase</code> consultent les tables de faits. Les résultats sont décodés en objets et valeurs JavaScript.</p>
-                <p>Une variable déclarée dans <code>select</code> mais inutilisée dans la condition vaut <code>undefined</code>. Son domaine n’est pas parcouru, même s’il est rempli ; un domaine vide n’empêche donc pas les autres résultats. Par exemple, <code>select({p:"Ref",n:"string"},est(variable("p"),"Personne"))</code> renvoie les personnes avec <code>n: undefined</code>. Une variable masquée par un quantificateur ne lie pas la variable extérieure.</p>
+                <p><code>query(select(...))</code> est compilé en SQL paramétré. Les domaines des variables utilisées viennent de <code>refs</code>, <code>compositions</code>, <code>phrases</code> ou <code>primitive_values</code> selon le type déclaré ; les conditions <code>composition</code> et <code>phrase</code> consultent les tables de faits. Les résultats sont décodés en objets et valeurs JavaScript.</p>
+                <p>Une variable déclarée dans <code>select</code> mais inutilisée dans la condition vaut <code>undefined</code>. Son domaine n’est pas parcouru, même s’il est rempli ; un domaine vide n’empêche donc pas les autres résultats. Par exemple, <code>select({p:"Ref",n:"string"},composition(variable("p"),"Personne"))</code> renvoie les personnes avec <code>n: undefined</code>. Une variable masquée par un quantificateur ne lie pas la variable extérieure.</p>
                 <p>Une condition <code>true</code> ne lie aucune variable. Pour lister toutes les chaînes enregistrées, écrire <code>query(select({n:"string"},eq(variable("n"),variable("n"))))</code>. Les variables réellement utilisées et les domaines locaux des quantificateurs conservent leurs conditions habituelles.</p>
                 <p>Le runtime retourne de vrais <code>undefined</code>. Dans le JSON de l’API, les propriétés correspondantes sont encodées <code>{"$undefined":true}</code> pour conserver les colonnes ; la console les affiche comme <code>undefined</code>.</p>
                 <p>Les scripts des deux API d’exécution s’effectuent dans une transaction : une erreur annule leurs écritures, y compris les références et les valeurs primitives ajoutées. L’historique d’un appel agent est enregistré séparément et conserve l’erreur. Les connexions utilisent le journal WAL et un délai d’attente SQLite de 5 secondes. Les fichiers annexes <code>-wal</code> et <code>-shm</code> appartiennent à SQLite ; ce ne sont pas des tables applicatives.</p>

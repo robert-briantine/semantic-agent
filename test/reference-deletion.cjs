@@ -4,7 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { Runtime, Ref, est, phrase, all, implies, variable, select, eq } = require('../dist/runtime');
+const { Runtime, Ref, composition, phrase, all, implies, variable, select, eq } = require('../dist/runtime');
 
 function setup(t) {
     const dir = mkdtempSync(join(tmpdir(), 'semantic-delete-ref-'));
@@ -26,14 +26,14 @@ test('Suppression : références directes, compléments, propositions imbriquée
         runtime.addMemoryComposition(target, 'Personne');
         runtime.addMemoryComposition('Alice', 'Nom', target);
         runtime.addMemoryComposition(phrase(other, 'voir', target), 'Observation');
-        runtime.addMemoryComposition(other, 'Relation', est(target, 'imbrication'));
+        runtime.addMemoryComposition(other, 'Relation', composition(target, 'imbrication'));
         runtime.addMemoryComposition('exclusif', 'Signal', target);
         runtime.addMemoryComposition(32, 'Nombre', target);
         runtime.addMemoryPhrase(target, 'dormir');
         runtime.addMemoryPhrase(other, 'voir', target);
         runtime.addMemoryPhrase(other, 'parler', ['à', target]);
         runtime.addMemoryPhrase(other, 'penser', phrase(other, 'affirmer', phrase(target, 'connaître', other)));
-        runtime.addMemoryPhrase(other, 'croire', all({ p: 'Ref' }, implies(phrase(variable('p'), 'voir', target), est(variable('p'), 'Personne'))));
+        runtime.addMemoryPhrase(other, 'croire', all({ p: 'Ref' }, implies(phrase(variable('p'), 'voir', target), composition(variable('p'), 'Personne'))));
         runtime.addMemoryPhrase(other, 'répéter', new Ref(target.id), ['avec', target], orphan);
         runtime.addMemoryPhrase(other, 'dire', false, target);
         // Faits indépendants, y compris des textes identiques à l’ID ou à son JSON.
@@ -47,7 +47,7 @@ test('Suppression : références directes, compléments, propositions imbriquée
     });
     const plan = sql.prepare("EXPLAIN QUERY PLAN SELECT fact_id FROM fact_arguments WHERE type='Ref' AND value=?").all(JSON.stringify({ $ref: target.id }));
     assert.ok(plan.some(row => /SEARCH .*PRIMARY KEY/.test(row.detail)), JSON.stringify(plan));
-    assert.deepEqual(runtime.deleteReference(target.id), { refId: target.id, deleted: { compositions: 6, phrases: 11, refs: 2, primitiveValues: 3 } });
+    assert.deepEqual(runtime.deleteReference(target.id), { refId: target.id, deleted: { compositions: 8, phrases: 11, refs: 2, primitiveValues: 3 } });
     assert.equal(runtime.memoryComposition.length, 6);
     assert.deepEqual(runtime.memoryRelation.map(value => value[2]), ['rester']);
     assert.deepEqual(runtime.query(select({ p: 'Ref' }, eq(variable('p'), variable('p')))).map(row => row.p.id).sort(), [other.id, prefix.id].sort());
@@ -117,7 +117,7 @@ test('Suppression groupée : références et faits communs dédupliqués', t => 
     assert.deepEqual(runtime.deleteReferences([a.id, b.id, a.id]), {
         refIds: [a.id, b.id], deleted: { compositions: 2, phrases: 2, refs: 2, primitiveValues: 0 }
     });
-    assert.deepEqual(runtime.memoryComposition.map(value => value.ref.id), [c.id]);
+    assert.deepEqual(runtime.memoryComposition.map(value => value[1].id), [c.id]);
     assert.deepEqual(runtime.memoryRelation.map(value => value[2]), ['rester']);
     assert.equal(sql.prepare('SELECT count(*) AS n FROM fact_arguments').get().n, 2);
 });

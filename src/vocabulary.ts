@@ -76,7 +76,7 @@ export function validateVocabulary(value: unknown, known: WordLookup = bundledWo
             checkName('verbe', value[2], known);
             validateVocabulary(value[1], known);
             for (const child of value.slice(3)) complement(child, known);
-        } else if (value[0] === 'est' && value.length >= 3) {
+        } else if (value[0] === 'composition' && value.length >= 3) {
             checkName('nom', value[2], known);
             validateVocabulary(value[1], known); validateVocabulary(value[3], known);
         } else if (value[0] === 'contient' && value.length === 3) {

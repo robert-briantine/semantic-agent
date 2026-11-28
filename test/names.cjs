@@ -4,16 +4,16 @@ const { DatabaseSync } = require('node:sqlite');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { Runtime, Ref, est, phrase, variable, select } = require('../dist/runtime');
+const { Runtime, Ref, composition, phrase, variable, select } = require('../dist/runtime');
 
 const names = ['être', ['être', 'célèbre'], ['être', ''], ['être', '["Personne","célèbre"]'], ['être', '"Personne"'], ['être', 'true'], ['être', 'null'], ['être', '« cité »'], ['être', 'l’homme "célèbre"']];
 
 function checkNames(runtime, refs) {
     names.forEach((name, index) => {
-        assert.deepEqual(runtime.query(select({ p: 'Ref' }, est(variable('p'), name))).map(row => row.p.id), [refs[index].id]);
+        assert.deepEqual(runtime.query(select({ p: 'Ref' }, composition(variable('p'), name))).map(row => row.p.id), [refs[index].id]);
         assert.deepEqual(runtime.query(select({ p: 'Ref' }, phrase(variable('p'), name))).map(row => row.p.id), [refs[index].id]);
     });
-    assert.deepEqual(runtime.memoryComposition.map(value => value.name), names);
+    assert.deepEqual(runtime.memoryComposition.map(value => value[2]), names);
     assert.deepEqual(runtime.memoryRelation.map(value => value[2]), names);
 }
 
@@ -69,6 +69,11 @@ test('Migration des noms JSON : faits, identités, qualificatifs et index conser
             sql.prepare('INSERT INTO phrases VALUES (?,?,?,?,?)').run(index + 20, JSON.stringify(ref), JSON.stringify(name), '[]', JSON.stringify({ $phrase: [ref, name, []] }));
         });
         const before = Object.fromEntries(['compositions', 'phrases'].map(table => [table, sql.prepare(`SELECT id,value FROM ${table} ORDER BY id`).all()]));
+        before.compositions = before.compositions.map(row => {
+            const [ref, name, of] = JSON.parse(row.value).$composition;
+            const value = of?.$undefined ? ['composition', ref, name] : ['composition', ref, name, of];
+            return Object.assign(Object.create(Object.getPrototypeOf(row)), row, { value: JSON.stringify(value) });
+        });
         before.phrases = before.phrases.map(row => {
             const [subject, name, complements] = JSON.parse(row.value).$phrase;
             return Object.assign(Object.create(Object.getPrototypeOf(row)), row, { value: JSON.stringify(['phrase', subject, name, ...complements]) });

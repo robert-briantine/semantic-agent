@@ -68,10 +68,23 @@ test('Types Monaco : symboles globaux, inférence des requêtes et erreurs de ty
         writeFileSync(script, `
             const p = new Ref();
             addMemoryComposition(p, "Personne");
-            const rows = query(select({ p: "Ref" }, est(variable("p"), "Personne")));
+            const rows = query(select({ p: "Ref" }, composition(variable("p"), "Personne")));
             const ref: Ref = rows[0].p;
             const action: Phrase = query(select({ action: "Phrase" }, eq(variable("action"), variable("action"))))[0].action;
-            const composition: Composition = memoryComposition()[0];
+            const storedComposition: Composition = memoryComposition()[0];
+            const property: Composition = composition(p, "Personne");
+            const nestedProperty: Element = composition("Alice", "Nom", p);
+            const returnedProperty: Composition = addMemoryComposition(p, "Personne");
+            const properties = query(select({ c: "Composition", unused: "string" }, phrase(p, "pense", variable("c"))));
+            const selectedProperty: Composition = properties[0].c;
+            const unusedProperty: undefined = properties[0].unused;
+            const propertyPattern = query(select({ p: "Ref", unused: "string" }, ["composition", ["var", "p"], "Personne"]));
+            const propertyRef: Ref = propertyPattern[0].p;
+            const propertyUnused: undefined = propertyPattern[0].unused;
+            // @ts-expect-error Composition est un type tuple, pas un constructeur.
+            new Composition(p, "Personne");
+            // @ts-expect-error Le helper est est remplacé par composition.
+            est(p, "Personne");
             const refs: Set<Ref> = memoryRef();
             const actions = query(select({ c: "complements", objet: "Ref" }, and(
                 phrase(p, "donner", variable("c")), contient(variable("c"), ["à", variable("objet")])
@@ -91,7 +104,7 @@ test('Types Monaco : symboles globaux, inférence des requêtes et erreurs de ty
             const rawContains: Complements = query(select({ c: "complements" }, ["contient", ["var", "c"], ["à", p]]))[0].c;
             // @ts-expect-error Une liste de compléments n'est pas une chaîne.
             const invalidList: string = actions[0].c;
-            print(ref, action, composition, refs, memoryRelation());
+            print(ref, action, storedComposition, refs, memoryRelation());
             addMemoryComposition(true, "Actif", p);
             const unite = new Ref();
             addMemoryComposition(unite, "Unité");
@@ -108,26 +121,26 @@ test('Types Monaco : symboles globaux, inférence des requêtes et erreurs de ty
             // @ts-expect-error La règle s'applique aux recherches contient.
             contient(variable("c"), ["objet", "rapport"]);
             const primitives = query(select({ nom: "string", age: "number", actif: "boolean" },
-                and(est(variable("nom"), "Nom", p), est(variable("age"), "Age", p), est(variable("actif"), "Actif", p))));
+                and(composition(variable("nom"), "Nom", p), composition(variable("age"), "Age", p), composition(variable("actif"), "Actif", p))));
             const nom: string = primitives[0].nom;
             const age: number = primitives[0].age;
             const actif: boolean = primitives[0].actif;
             const union: QueryResult<{ value: "string" | "number" }>['value'] = 42;
-            const projected = query(select({ p: "Ref", n: "string" }, est(variable("p"), "Personne")));
+            const projected = query(select({ p: "Ref", n: "string" }, composition(variable("p"), "Personne")));
             const projectedRef: Ref = projected[0].p;
             const unusedName: undefined = projected[0].n;
-            const raw = query(select({ p: "Ref", n: "string" }, ["est", ["var", "p"], "Personne"]));
+            const raw = query(select({ p: "Ref", n: "string" }, ["composition", ["var", "p"], "Personne"]));
             const rawRef: Ref = raw[0].p;
             const rawUnused: undefined = raw[0].n;
             const shadow = query(select({ p: "Ref", n: "string" }, and(
-                est(variable("p"), "Personne"), exists({ n: "Ref" }, eq(variable("n"), variable("p")))
+                composition(variable("p"), "Personne"), exists({ n: "Ref" }, eq(variable("n"), variable("p")))
             )));
             const shadowUnused: undefined = shadow[0].n;
             const shadowRef: Ref = shadow[0].p;
             const constant = query(select({ n: "string" }, true));
             const unusedConstant: undefined = constant[0].n;
             const switched = query(select({ p: "Ref", unused: "string" }, switchCase([
-                implies(est(variable("p"), "Prioritaire"), false),
+                implies(composition(variable("p"), "Prioritaire"), false),
                 implies(phrase(variable("p"), "travailler"), eq(variable("p"), p))
             ], eq(variable("p"), p))));
             const switchedRef: Ref = switched[0].p;
@@ -137,7 +150,7 @@ test('Types Monaco : symboles globaux, inférence des requêtes et erreurs de ty
             // @ts-expect-error Les résultats des cas doivent être des expressions.
             switchCase([implies(true, true)], "invalide");
             // @ts-expect-error La variable doit être déclarée par select.
-            select({}, switchCase([implies(est(variable("missing"), "Personne"), true)], false));
+            select({}, switchCase([implies(composition(variable("missing"), "Personne"), true)], false));
             function dynamic(q: Query<{ p: "Ref", n: "string" }>) {
                 const maybeName: string | undefined = query(q)[0].n;
                 // @ts-expect-error Une expression dynamique peut ne pas utiliser n.

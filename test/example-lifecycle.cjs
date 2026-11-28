@@ -61,9 +61,9 @@ test('Exécution : finally, suppression protégée en lecture et annulation int�
     };
     assert.deepEqual(run(`const p=new Ref();try{
         addMemoryComposition("Alice","Nom",p);
-        print(query(select({nom:"string"},est(variable("nom"),"Nom",p))));
+        print(query(select({nom:"string"},composition(variable("nom"),"Nom",p))));
     }finally{deleteReferences([p]);}
-    print(query(select({},est("Alice","Nom",p))));`), {
+    print(query(select({},composition("Alice","Nom",p))));`), {
         ok: true, output: [[[{ nom: 'Alice' }]], [[]]]
     });
     assert.deepEqual(snapshot(), before);

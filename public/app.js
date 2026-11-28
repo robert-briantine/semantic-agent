@@ -14,7 +14,7 @@ self.MonacoEnvironment = {
 
 const $ = id => document.getElementById(id);
 const code = $('code'), results = $('results');
-const sample = `// Rechercher les personnes enregistrées\nconst personnes = query(\n    select({ p: "Ref" },\n        est(variable("p"), "Personne")\n    )\n)\nprint(personnes)`;
+const sample = `// Rechercher les personnes enregistrées\nconst personnes = query(\n    select({ p: "Ref" },\n        composition(variable("p"), "Personne")\n    )\n)\nprint(personnes)`;
 let editor, libraryEditor;
 function layoutEditors() {
     requestAnimationFrame(() => { editor?.layout(); libraryEditor?.layout(); });

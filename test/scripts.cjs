@@ -47,7 +47,7 @@ test('Scripts : enregistrement, renommage, rechargement après redémarrage et e
     try {
         const path = join(dir, 'memory.sqlite');
         server = await startServer(path);
-        const code = 'function creer(nom:string){const p=new Ref();addMemoryComposition(nom,"Nom",p);return p;} const p=creer("Alice"); print(query(select({nom:"string"},est(variable("nom"),"Nom",p))));';
+        const code = 'function creer(nom:string){const p=new Ref();addMemoryComposition(nom,"Nom",p);return p;} const p=creer("Alice"); print(query(select({nom:"string"},composition(variable("nom"),"Nom",p))));';
         const created = await server.request('POST', '/api/scripts', { name: '  Acquisition Alice  ', code, mode: 'write' });
         assert.equal(created.status, 201);
         const saved = await created.json();

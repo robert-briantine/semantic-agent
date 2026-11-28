@@ -25,7 +25,7 @@ test('Autocomplétion : p et n sont proposés dans le script de recherche de Pau
         addMemoryComposition(ref, "Personne");
         addMemoryComposition("Paul", "nom", ref);
         const personnes = query(select({ p: "Ref", n: "string" },
-            and(est(variable("¦"), "Personne"), est(variable("n"), "nom", variable("p")))));
+            and(composition(variable("¦"), "Personne"), composition(variable("n"), "nom", variable("p")))));
         print(personnes);
     `);
     const suggestions = complete();
@@ -36,40 +36,40 @@ test('Autocomplétion : p et n sont proposés dans le script de recherche de Pau
 
 test('Autocomplétion : portées imbriquées, masquage et requêtes indépendantes', () => {
     const nested = fixture(`select({p:"Ref",n:"string"}, exists({p:"number",b:"boolean"},
-        and(eq(variable("¦"), 1), est(variable("n"), "nom"))))`).complete();
+        and(eq(variable("¦"), 1), composition(variable("n"), "nom"))))`).complete();
     assert.deepEqual(nested.map(item => [item.name, item.type]), [['p', '"number"'], ['b', '"boolean"'], ['n', '"string"']]);
-    const outside = fixture(`select({p:"Ref"}, and(exists({hidden:"string"},true), est(variable("¦"),"Personne")))`).complete();
+    const outside = fixture(`select({p:"Ref"}, and(exists({hidden:"string"},true), composition(variable("¦"),"Personne")))`).complete();
     assert.deepEqual(outside.map(item => item.name), ['p']);
-    const separate = fixture(`select({outer:"Ref"}, eq(query(select({inner:"string"},est(variable("¦"),"Nom")))[0].inner,"Paul"))`).complete();
+    const separate = fixture(`select({outer:"Ref"}, eq(query(select({inner:"string"},composition(variable("¦"),"Nom")))[0].inner,"Paul"))`).complete();
     assert.deepEqual(separate.map(item => item.name), ['inner']);
     assert.deepEqual(fixture(`all({name:"string"}, eq(variable("¦"), "Paul"))`).complete().map(item => item.name), ['name']);
 });
 
 test('Autocomplétion : déclarations réutilisées, texte incomplet et remplacement du nom entier', () => {
     const reusable = fixture(`const vars = {p:"Ref",n:"string"} as const;
-        select(vars, est(variable("¦"),"Personne"))`).complete();
+        select(vars, composition(variable("¦"),"Personne"))`).complete();
     assert.deepEqual(reusable.map(item => item.name), ['p', 'n']);
     const spread = fixture(`const vars = {p:"Ref"} as const;
-        select({...vars,n:"string"}, est(variable("¦"),"Personne"))`).complete();
+        select({...vars,n:"string"}, composition(variable("¦"),"Personne"))`).complete();
     assert.deepEqual(spread.map(item => item.name).sort(), ['n', 'p']);
-    const partial = fixture(`select({personne:"Ref",nom:"string"},est(variable("per¦sonne"),"Personne"))`);
+    const partial = fixture(`select({personne:"Ref",nom:"string"},composition(variable("per¦sonne"),"Personne"))`);
     const suggestion = partial.complete().find(item => item.name === 'nom');
     const span = suggestion.replacementSpan;
     assert.equal(partial.code.slice(span.start, span.start + span.length), 'personne');
-    const unfinished = fixture('select({p:"Ref",n:"string"},est(variable("n¦');
+    const unfinished = fixture('select({p:"Ref",n:"string"},composition(variable("n¦');
     assert.deepEqual(unfinished.complete().map(item => item.name), ['p', 'n']);
-    const quoted = fixture(`select({"l'auteur":"Ref"},est(variable('¦'),"Personne"))`).complete();
+    const quoted = fixture(`select({"l'auteur":"Ref"},composition(variable('¦'),"Personne"))`).complete();
     assert.equal(quoted[0].name, "l\\'auteur");
 });
 
 test('Autocomplétion : aucune variable d’une autre portée ou d’un commentaire', () => {
     assert.deepEqual(fixture(`select({p:"Ref"},true); variable("¦")`).complete(), []);
-    assert.equal(fixture(`select({p:"Ref"},est(new Ref(),"¦"))`).complete(), undefined);
+    assert.equal(fixture(`select({p:"Ref"},composition(new Ref(),"¦"))`).complete(), undefined);
     assert.equal(fixture(`select({p:"Ref"},true); // variable("¦")`).complete(), undefined);
     assert.equal(fixture(`select({p:"Ref"},obj.variable("¦"))`).complete(), undefined);
 });
 
-test('TypeScript propose les six types de variables et infère string pour n', () => {
+test('TypeScript propose les sept types de variables et infère string pour n', () => {
     const { code, position, program } = fixture(`const personnes = query(select({p:"Ref",n:"¦"},true));`);
     const filename = resolve('completion-script.ts');
     const options = program.getCompilerOptions();
@@ -85,10 +85,10 @@ test('TypeScript propose les six types de variables et infère string pour n', (
         readFile: ts.sys.readFile, readDirectory: ts.sys.readDirectory
     });
     assert.deepEqual(service.getCompletionsAtPosition(filename, position, {}).entries.map(item => item.name).sort(),
-        ['Phrase', 'Ref', 'boolean', 'complements', 'number', 'string']);
+        ['Composition', 'Phrase', 'Ref', 'boolean', 'complements', 'number', 'string']);
     service.dispose();
     const typed = fixture(`const ref = new Ref();
-        const personnes = query(select({p:"Ref",n:"string"},and(est(variable("p"),"Personne"),est(variable("n"),"nom",variable("p")))));
+        const personnes = query(select({p:"Ref",n:"string"},and(composition(variable("p"),"Personne"),composition(variable("n"),"nom",variable("p")))));
         const name: string = personnes[0].n;
         const person: Ref = personnes[0].p;
         // @ts-expect-error Le nom est une chaîne.

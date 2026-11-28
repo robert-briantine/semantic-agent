@@ -1,7 +1,7 @@
 // Fichier généré depuis src/example-scripts.ts par scripts/build-examples.cjs.
 // Chaque exemple prépare ses données, affiche son résultat puis supprime ses données.
 // Données fictives : choisir un bloc et adapter la traduction à la demande réelle.
-import { Ref, Composition, variable, est, phrase, contient, all, exists, and, or, not, implies, switchCase, eq, select, query, addMemoryPhrase, addMemoryComposition, deleteReferences, print } from "./structure-langage-pour-ia";
+import { Ref, variable, composition, phrase, contient, all, exists, and, or, not, implies, switchCase, eq, select, query, addMemoryPhrase, addMemoryComposition, deleteReferences, print } from "./structure-langage-pour-ia";
 
 // Exemple switchCase — 1. Insertion
 // Mode : write. Chaque bloc représente un appel indépendant.
@@ -33,7 +33,7 @@ try {
     addMemoryComposition(chloe, "Invité");
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, alice, bob, chloe, denis]);
@@ -72,10 +72,10 @@ try {
     addMemoryComposition(chloe, "Invité");
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), switchCase([
-        implies(est(variable("p"), "exclusion"), false),
-        implies(est(variable("p"), "Actif"), true)
-    ], est(variable("p"), "Invité")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), switchCase([
+        implies(composition(variable("p"), "exclusion"), false),
+        implies(composition(variable("p"), "Actif"), true)
+    ], composition(variable("p"), "Invité")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, alice, bob, chloe, denis]);
@@ -127,7 +127,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), true)))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), true)))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -143,7 +143,7 @@ print(query(select({}, true)));
 print(query(select({}, false)));
 }
 
-// Exemple expressions — 02. est — compositions
+// Exemple expressions — 02. composition — compositions
 // Mode : write. Chaque bloc représente un appel indépendant.
 {
 // Script autonome et idempotent : aucune préparation préalable.
@@ -182,7 +182,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), est(variable("p"), "Actif"))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), composition(variable("p"), "Actif"))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -228,7 +228,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), phrase(variable("p"), "salue"))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), phrase(variable("p"), "salue"))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -274,7 +274,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), eq(variable("nom"), "Ana"))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), eq(variable("nom"), "Ana"))))));
     print(query(select({}, eq(42, 42))));
     print(query(select({}, eq(false, true))));
 } finally {
@@ -322,7 +322,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), not(est(variable("p"), "Actif")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), not(composition(variable("p"), "Actif")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -368,7 +368,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), and(est(variable("p"), "Actif"), est(variable("p"), "Responsable")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), and(composition(variable("p"), "Actif"), composition(variable("p"), "Responsable")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -414,7 +414,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), or(est(variable("p"), "Responsable"), est(variable("p"), "Invité")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), or(composition(variable("p"), "Responsable"), composition(variable("p"), "Invité")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -461,7 +461,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), implies(est(variable("p"), "Actif"), est(variable("p"), "Responsable")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), implies(composition(variable("p"), "Actif"), composition(variable("p"), "Responsable")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -508,10 +508,10 @@ try {
 
     // Afficher le résultat avant de nettoyer.
     print(query(select({ nom: "string", objet: "string", destinataire: "string" }, exists({ p: "Ref", c: "complements", rapport: "Ref", personne: "Ref" }, and(
-        est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")),
+        composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")),
         phrase(variable("p"), "envoie", variable("c")), contient(variable("c"), variable("rapport")),
-        est(variable("rapport"), "Rapport"), est(variable("objet"), "Nom", variable("rapport")),
-        contient(variable("c"), ["à", variable("personne")]), est(variable("destinataire"), "Nom", variable("personne"))
+        composition(variable("rapport"), "Rapport"), composition(variable("objet"), "Nom", variable("rapport")),
+        contient(variable("c"), ["à", variable("personne")]), composition(variable("destinataire"), "Nom", variable("personne"))
     )))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
@@ -559,8 +559,8 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({}, all({ p: "Ref" }, implies(est(variable("p"), "exemple", jeu), or(est(variable("p"), "Actif"), est(variable("p"), "Invité")))))));
-    print(query(select({}, all({ p: "Ref" }, implies(est(variable("p"), "exemple", jeu), est(variable("p"), "Actif"))))));
+    print(query(select({}, all({ p: "Ref" }, implies(composition(variable("p"), "exemple", jeu), or(composition(variable("p"), "Actif"), composition(variable("p"), "Invité")))))));
+    print(query(select({}, all({ p: "Ref" }, implies(composition(variable("p"), "exemple", jeu), composition(variable("p"), "Actif"))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -607,7 +607,7 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ autre: "Ref" }, and(est(variable("autre"), "exemple", jeu), phrase(variable("p"), "aide", variable("autre")))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), exists({ autre: "Ref" }, and(composition(variable("autre"), "exemple", jeu), phrase(variable("p"), "aide", variable("autre")))))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -653,9 +653,9 @@ try {
     addMemoryPhrase(brunoExemple, "transmet", objetExemple, ["depuis", bureauExemple]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", table: "Ref" }, and(est(variable("rapport"), "Rapport"), est(variable("table"), "Table"), phrase(variable("p"), "pose", variable("rapport"), ["sur", variable("table")]))))))));
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", destinataire: "Ref", compagnon: "Ref" }, and(est(variable("rapport"), "Rapport"), est("Clara", "Nom", variable("destinataire")), est("Bruno", "Nom", variable("compagnon")), phrase(variable("p"), "prépare", variable("rapport"), ["pour", variable("destinataire")], ["avec", variable("compagnon")]))))))));
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", bureau: "Ref" }, and(est(variable("rapport"), "Rapport"), est(variable("bureau"), "Bureau"), phrase(variable("p"), "transmet", variable("rapport"), ["depuis", variable("bureau")]))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", table: "Ref" }, and(composition(variable("rapport"), "Rapport"), composition(variable("table"), "Table"), phrase(variable("p"), "pose", variable("rapport"), ["sur", variable("table")]))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", destinataire: "Ref", compagnon: "Ref" }, and(composition(variable("rapport"), "Rapport"), composition("Clara", "Nom", variable("destinataire")), composition("Bruno", "Nom", variable("compagnon")), phrase(variable("p"), "prépare", variable("rapport"), ["pour", variable("destinataire")], ["avec", variable("compagnon")]))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "Nom", variable("p")), exists({ rapport: "Ref", bureau: "Ref" }, and(composition(variable("rapport"), "Rapport"), composition(variable("bureau"), "Bureau"), phrase(variable("p"), "transmet", variable("rapport"), ["depuis", variable("bureau")]))))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, anaExemple, brunoExemple, claraExemple, objetExemple, tableExemple, bureauExemple]);
@@ -751,7 +751,7 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("p"), "personne"), composition(variable("nom"), "nom", variable("p")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -839,7 +839,7 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), exists({ collaborateur: "Ref", rapport: "Ref" }, and(phrase(variable("p"), "dirige", variable("collaborateur")), phrase(variable("collaborateur"), "rédige", variable("rapport")), est(variable("rapport"), "rapport"), phrase(variable("rapport"), "concerne", atlas))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("p"), "personne"), composition(variable("nom"), "nom", variable("p")), exists({ collaborateur: "Ref", rapport: "Ref" }, and(phrase(variable("p"), "dirige", variable("collaborateur")), phrase(variable("collaborateur"), "rédige", variable("rapport")), composition(variable("rapport"), "rapport"), phrase(variable("rapport"), "concerne", atlas))))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -928,7 +928,7 @@ try {
 
     // Afficher le résultat avant de nettoyer.
     const rapport = avancement;
-    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "prépare", variable("c")), contient(variable("c"), rapport), contient(variable("c"), ["pour", omar]), contient(variable("c"), ["avec", lea]), contient(variable("c"), ["depuis", bureau]), contient(variable("c"), ["parce que", phrase(omar, "demande", rapport)]))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "nom", variable("p")), phrase(variable("p"), "prépare", variable("c")), contient(variable("c"), rapport), contient(variable("c"), ["pour", omar]), contient(variable("c"), ["avec", lea]), contient(variable("c"), ["depuis", bureau]), contient(variable("c"), ["parce que", phrase(omar, "demande", rapport)]))))));
     print(query(select({}, phrase(omar, "demande", rapport))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
@@ -1017,8 +1017,8 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "pense", variable("c")), contient(variable("c"), phrase(nora, "valide", budget)), contient(variable("c"), ["dans", document]))))));
-    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "affirme", variable("c")), contient(variable("c"), not(phrase(nora, "valide", budget))), contient(variable("c"), ["dans", document]))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "nom", variable("p")), phrase(variable("p"), "pense", variable("c")), contient(variable("c"), phrase(nora, "valide", budget)), contient(variable("c"), ["dans", document]))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref", c: "complements" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "nom", variable("p")), phrase(variable("p"), "affirme", variable("c")), contient(variable("c"), not(phrase(nora, "valide", budget))), contient(variable("c"), ["dans", document]))))));
     print(query(select({}, phrase(nora, "valide", budget))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
@@ -1107,8 +1107,8 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), and(est(variable("p"), "responsable"), exists({ c: "Ref", r: "Ref" }, and(est(variable("c"), "collaborateur"), est(variable("r"), "rapport"), phrase(variable("p"), "dirige", variable("c")), phrase(variable("c"), "rédige", variable("r")))), all({ c: "Ref", r: "Ref" }, implies(and(est(variable("c"), "collaborateur"), est(variable("r"), "rapport"), phrase(variable("p"), "dirige", variable("c")), phrase(variable("c"), "rédige", variable("r"))), phrase(variable("p"), "valide", variable("r"))))))))));
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), and(est(variable("p"), "responsable"), exists({ c: "Ref" }, and(est(variable("c"), "collaborateur"), phrase(variable("p"), "dirige", variable("c")), exists({ r: "Ref" }, and(est(variable("r"), "rapport"), phrase(variable("c"), "rédige", variable("r")))), all({ r: "Ref" }, implies(and(est(variable("r"), "rapport"), phrase(variable("c"), "rédige", variable("r"))), phrase(variable("p"), "valide", variable("r"))))))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("p"), "personne"), composition(variable("nom"), "nom", variable("p")), and(composition(variable("p"), "responsable"), exists({ c: "Ref", r: "Ref" }, and(composition(variable("c"), "collaborateur"), composition(variable("r"), "rapport"), phrase(variable("p"), "dirige", variable("c")), phrase(variable("c"), "rédige", variable("r")))), all({ c: "Ref", r: "Ref" }, implies(and(composition(variable("c"), "collaborateur"), composition(variable("r"), "rapport"), phrase(variable("p"), "dirige", variable("c")), phrase(variable("c"), "rédige", variable("r"))), phrase(variable("p"), "valide", variable("r"))))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("p"), "personne"), composition(variable("nom"), "nom", variable("p")), and(composition(variable("p"), "responsable"), exists({ c: "Ref" }, and(composition(variable("c"), "collaborateur"), phrase(variable("p"), "dirige", variable("c")), exists({ r: "Ref" }, and(composition(variable("r"), "rapport"), phrase(variable("c"), "rédige", variable("r")))), all({ r: "Ref" }, implies(and(composition(variable("r"), "rapport"), phrase(variable("c"), "rédige", variable("r"))), phrase(variable("p"), "valide", variable("r"))))))))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -1196,8 +1196,8 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({}, and(exists({ c: "Ref" }, and(est(variable("c"), "exemple", jeu), est(variable("c"), "collaborateur"))), all({ c: "Ref" }, implies(and(est(variable("c"), "exemple", jeu), est(variable("c"), "collaborateur")), exists({ projet: "Ref" }, and(est(variable("projet"), "projet"), phrase(variable("c"), "participe", ["à", variable("projet")])))))))));
-    print(query(select({}, exists({ projet: "Ref" }, and(est(variable("projet"), "projet"), all({ c: "Ref" }, implies(and(est(variable("c"), "exemple", jeu), est(variable("c"), "collaborateur")), phrase(variable("c"), "participe", ["à", variable("projet")]))))))));
+    print(query(select({}, and(exists({ c: "Ref" }, and(composition(variable("c"), "exemple", jeu), composition(variable("c"), "collaborateur"))), all({ c: "Ref" }, implies(and(composition(variable("c"), "exemple", jeu), composition(variable("c"), "collaborateur")), exists({ projet: "Ref" }, and(composition(variable("projet"), "projet"), phrase(variable("c"), "participe", ["à", variable("projet")])))))))));
+    print(query(select({}, exists({ projet: "Ref" }, and(composition(variable("projet"), "projet"), all({ c: "Ref" }, implies(and(composition(variable("c"), "exemple", jeu), composition(variable("c"), "collaborateur")), phrase(variable("c"), "participe", ["à", variable("projet")]))))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -1285,8 +1285,8 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ rapport: "Ref" }, and(est(variable("rapport"), "exemple", jeu), est(variable("rapport"), "rapport"), est(variable("nom"), "nom", variable("rapport")), not(phrase(nora, "valide", variable("rapport"))))))));
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), phrase(variable("p"), "affirme", not(phrase(nora, "valide", budget)), ["dans", document]))))));
+    print(query(select({ nom: "string" }, exists({ rapport: "Ref" }, and(composition(variable("rapport"), "exemple", jeu), composition(variable("rapport"), "rapport"), composition(variable("nom"), "nom", variable("rapport")), not(phrase(nora, "valide", variable("rapport"))))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("p"), "personne"), composition(variable("nom"), "nom", variable("p")), phrase(variable("p"), "affirme", not(phrase(nora, "valide", budget)), ["dans", document]))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -1374,11 +1374,11 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("p"), "personne"), est(variable("nom"), "nom", variable("p")), switchCase([
-        implies(est(variable("p"), "exclusion"), false),
-        implies(est(variable("p"), "responsable"), true),
-        implies(est(variable("p"), "collaborateur"), and(est(true, "disponibilité", variable("p")), est(0, "retard", variable("p"))))
-    ], est(variable("p"), "invité")))))));
+    print(query(select({ nom: "string" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("p"), "personne"), composition(variable("nom"), "nom", variable("p")), switchCase([
+        implies(composition(variable("p"), "exclusion"), false),
+        implies(composition(variable("p"), "responsable"), true),
+        implies(composition(variable("p"), "collaborateur"), and(composition(true, "disponibilité", variable("p")), composition(0, "retard", variable("p"))))
+    ], composition(variable("p"), "invité")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -1466,7 +1466,7 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string", age: "number", retard: "number", disponible: "boolean" }, exists({ p: "Ref" }, and(est(variable("p"), "exemple", jeu), est(variable("nom"), "nom", variable("p")), est(variable("age"), "âge", variable("p")), eq(variable("age"), 42), est(variable("retard"), "retard", variable("p")), eq(variable("retard"), 0), est(variable("disponible"), "disponibilité", variable("p")), eq(variable("disponible"), false))))));
+    print(query(select({ nom: "string", age: "number", retard: "number", disponible: "boolean" }, exists({ p: "Ref" }, and(composition(variable("p"), "exemple", jeu), composition(variable("nom"), "nom", variable("p")), composition(variable("age"), "âge", variable("p")), eq(variable("age"), 42), composition(variable("retard"), "retard", variable("p")), eq(variable("retard"), 0), composition(variable("disponible"), "disponibilité", variable("p")), eq(variable("disponible"), false))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);
@@ -1554,8 +1554,8 @@ try {
     addMemoryPhrase(zoe, "affirme", not(phrase(nora, "valide", budget)), ["dans", document]);
 
     // Afficher le résultat avant de nettoyer.
-    print(query(select({ nom: "string" }, exists({ rapport: "Ref" }, and(est(variable("rapport"), "rapport"), est(variable("nom"), "nom", variable("rapport")), phrase(nora, "préparait", variable("rapport")))))));
-    print(query(select({ nom: "string" }, exists({ rapport: "Ref", c: "complements" }, and(est(variable("rapport"), "rapport"), est(variable("nom"), "nom", variable("rapport")), phrase(nora, "prépare", variable("c")), contient(variable("c"), variable("rapport")))))));
+    print(query(select({ nom: "string" }, exists({ rapport: "Ref" }, and(composition(variable("rapport"), "rapport"), composition(variable("nom"), "nom", variable("rapport")), phrase(nora, "préparait", variable("rapport")))))));
+    print(query(select({ nom: "string" }, exists({ rapport: "Ref", c: "complements" }, and(composition(variable("rapport"), "rapport"), composition(variable("nom"), "nom", variable("rapport")), phrase(nora, "prépare", variable("c")), contient(variable("c"), variable("rapport")))))));
 } finally {
     // Nettoyer uniquement les références créées par ce script, même en cas d’erreur.
     deleteReferences([jeu, nora, omar, lea, zoe, hugo, atlas, boreal, avancement, budget, bureau, document]);

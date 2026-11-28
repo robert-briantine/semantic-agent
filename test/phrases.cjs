@@ -13,7 +13,7 @@ for (const [name, api] of [['SQLite', sql], ['RAM', ram]]) test(`${name} : un se
     const db = name === 'SQLite' ? new sql.Runtime(':memory:') : ram;
     if (name === 'RAM') ram.clearMemory();
     t.after(() => name === 'SQLite' ? db.close() : ram.clearMemory());
-    const { Ref, phrase, select, variable, eq, not, all, implies, est, contient } = api;
+    const { Ref, phrase, select, variable, eq, not, all, implies, composition, contient } = api;
     const alice = new Ref(), bob = new Ref(), rapport = new Ref();
     const sommeil = phrase(bob, 'dort');
     assert.deepEqual(sommeil, ['phrase', bob, 'dort']);
@@ -34,8 +34,8 @@ for (const [name, api] of [['SQLite', sql], ['RAM', ram]]) test(`${name} : un se
     db.addMemoryComposition(not(validation), 'observation', sommeil);
     assert.deepEqual(db.query(select({ p: 'Phrase' }, eq(variable('p'), validation))), [{ p: validation }]);
     assert.deepEqual(db.query(select({}, phrase(bob, 'valide', rapport))), []);
-    assert.deepEqual(db.query(select({}, est(not(validation), 'observation', sommeil))), [{}]);
-    const regle = all({ x: 'Ref' }, implies(est(variable('x'), 'personne'), phrase(variable('x'), 'dort')));
+    assert.deepEqual(db.query(select({}, composition(not(validation), 'observation', sommeil))), [{}]);
+    const regle = all({ x: 'Ref' }, implies(composition(variable('x'), 'personne'), phrase(variable('x'), 'dort')));
     db.addMemoryPhrase(alice, 'affirme', regle);
     assert.deepEqual(db.query(select({}, phrase(alice, 'affirme', regle))), [{}]);
     db.addMemoryPhrase(bob, 'dort');

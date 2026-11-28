@@ -26,6 +26,9 @@ export function validateComplementUsage(value: unknown, scope: Scope = {}): void
         if (value[0] === 'fait' && value.length >= 3) {
             throw new Error('Expression « fait » remplacée : utilisez phrase(...) ou ["phrase", ...].');
         }
+        if (value[0] === 'est' && value.length >= 3) {
+            throw new Error('Expression « est » remplacée : utilisez composition(...) ou ["composition", ...].');
+        }
         if (isVariable(value)) return;
         if ((value[0] === 'all' || value[0] === 'exists') && value.length === 3 &&
             value[1] && typeof value[1] === 'object' && !Array.isArray(value[1])) {
@@ -41,8 +44,7 @@ export function validateComplementUsage(value: unknown, scope: Scope = {}): void
         } else for (const child of value) validateComplementUsage(child, scope);
     } else if ('subject' in value && 'name' in value) {
         throw new Error('Phrase objet interdite : utilisez phrase(sujet, verbe, ...complements) ou le tuple ["phrase", ...].');
-    } else if ('ref' in value && 'of' in value) {
-        validateComplementUsage(value.ref, scope);
-        validateComplementUsage(value.of, scope);
+    } else if ('ref' in value && 'name' in value) {
+        throw new Error('Composition objet interdite : utilisez composition(ref, nom, of?) ou le tuple ["composition", ...].');
     }
 }

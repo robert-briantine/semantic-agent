@@ -1,4 +1,4 @@
-import { collectPhrases } from './phrase-storage';
+import { collectPhrases, collectCompositions, normalizeFactTuples } from './phrase-storage';
 import { validateVocabulary } from './vocabulary';
 import { validateComplementUsage } from './validate-complements';
 
@@ -49,6 +49,7 @@ export type Preposition = string;
 export type VariableTypes = {
     Ref: Ref;
     Phrase: Phrase;
+    Composition: Composition;
     string: string;
     number: number;
     boolean: boolean;
@@ -84,13 +85,10 @@ export type Phrase<T extends Variables = {}> = [
 
 // Composition
 
-export class Composition<T extends Variables = {}> {
-    constructor(
-        public ref: Element<T> | string | number,
-        public name: NomCommun | [NomCommun, Qualificatif],
-        public of?: Element<T>
-    ) {}
-}
+/** Représentation unique d’une composition, également utilisable comme expression. */
+export type Composition<T extends Variables = {}> = [
+    "composition", Element<T> | string | number, NomCommun | [NomCommun, Qualificatif], Element<T>?
+];
 
 // Quantification
 
@@ -115,12 +113,7 @@ export type Expression<T extends Variables = {}> =
     | ["=", Element<T>, Element<T>]
     | ["contient", Complements<T> | Variable<T>, Complement<T>]
     | Phrase<T>
-    | [
-        "est",
-        Element<T> | string | number,
-        NomCommun | [NomCommun, Qualificatif],
-        Element<T>?
-    ]
+    | Composition<T>
     | [
         "all" | "exists",
         Variables,
@@ -183,42 +176,15 @@ export function eq<
     return ["=", a, b];
 }
 
-// Helper est
+// Helper composition
 
-export function est<
-    R extends Element<any> | string | number,
-    N extends Composition["name"]
->(
-    ref: R,
-    name: N
-): ["est", R, N];
-
-export function est<
-    R extends Element<any> | string | number,
-    N extends Composition["name"],
-    O extends Element<any> | undefined
->(
-    ref: R,
-    name: N,
-    of: O
-): ["est", R, N, O];
-
-export function est(
-    ref: Element<any> | string | number,
-    name: Composition["name"],
-    of?: Element<any>
-): [
-    "est",
-    Element<any> | string | number,
-    Composition["name"],
-    Element<any>?
-] {
-    return arguments.length === 2
-        ? ["est", ref, name]
-        : ["est", ref, name, of];
+export function composition<R extends Element<any> | string | number, N extends Composition[2]>(ref: R, name: N): ["composition", R, N];
+export function composition<R extends Element<any> | string | number, N extends Composition[2], O extends Element<any> | undefined>(ref: R, name: N, of: O): O extends undefined ? ["composition", R, N] : ["composition", R, N, O];
+export function composition(ref: Element<any> | string | number, name: Composition[2], of?: Element<any>): Composition<any> {
+    const expression = normalizeFactTuples<Composition<any>>(of === undefined ? ["composition", ref, name] : ["composition", ref, name, of]);
+    validateComplementUsage(expression);
+    return expression;
 }
-
-// Helper phrase
 
 export function phrase<
     S extends Element<any> | undefined,
@@ -229,7 +195,7 @@ export function phrase<
     name: N,
     ...complements: C
 ): ["phrase", S, N, ...C] {
-    const expression: ["phrase", S, N, ...C] = ["phrase", subject, name, ...complements];
+    const expression = normalizeFactTuples<["phrase", S, N, ...C]>(["phrase", subject, name, ...complements]);
     validateComplementUsage(expression);
     return expression;
 }
@@ -285,21 +251,18 @@ export const memoryComposition: Composition[] = [];
 
 export function addMemoryComposition(
     ref: Element | string | number,
-    name: Composition["name"],
+    name: Composition[2],
     of?: Element
-): void {
+): Composition {
 
-    const composition = new Composition(
-        ref,
-        name,
-        of
-    );
+    const value = composition(ref, name, of);
 
-    validateVariables(composition);
-    validateComplementUsage(composition);
-    validateVocabulary(composition);
+    validateVariables(value);
+    validateComplementUsage(value);
+    validateVocabulary(value);
 
-    memoryComposition.push(composition);
+    memoryComposition.push(value);
+    return value;
 }
 
 export function addMemoryPhrase(
@@ -351,11 +314,6 @@ export function getRefs(
         return;
     }
 
-    if (value instanceof Composition) {
-
-        getRefs(value.ref, set, visited);
-        getRefs(value.of, set, visited);
-    }
 }
 
 // Lecture des références
@@ -401,7 +359,6 @@ export type UsedVariableKeys<E, Depth extends unknown[] = []> =
     0 extends (1 & E) ? string :
     E extends readonly ["var", infer K extends string] ? K :
     E extends readonly ["all" | "exists", infer Local, infer Body] ? string extends keyof Local ? string : Exclude<UsedVariableKeys<Body, [...Depth, unknown]>, keyof Local> :
-    E extends Composition<any> ? string :
     E extends readonly unknown[] ? UsedVariableKeys<E[number], [...Depth, unknown]> : never;
 export type QueryResult<T extends Variables, E = unknown> = {
     -readonly [K in keyof T]: unknown extends E ? VariableTypes[T[K]] | undefined :
@@ -438,13 +395,6 @@ export function validateVariables(
         return;
     }
 
-    if (value instanceof Composition) {
-
-        validateVariables(value.ref, scope);
-        validateVariables(value.of, scope);
-
-        return;
-    }
 
     if (!Array.isArray(value)) {
         return;
@@ -509,8 +459,7 @@ type Domains = { [K in keyof VariableTypes]: VariableTypes[K][] };
 function usedVariables(value: unknown, bound: ReadonlySet<string> = new Set(), used = new Set<string>()): Set<string> {
     const visit = (child: unknown, scope = bound) => usedVariables(child, scope, used);
     if (value instanceof Ref) return used;
-    if (value instanceof Composition) { visit(value.ref); visit(value.of); }
-    else if (Array.isArray(value)) {
+    if (Array.isArray(value)) {
         if (value[0] === 'var' && value.length === 2 && typeof value[1] === 'string') {
             if (!bound.has(value[1])) used.add(value[1]);
         } else if ((value[0] === 'all' || value[0] === 'exists') && value.length === 3 && value[1] && typeof value[1] === 'object' && !Array.isArray(value[1])) {
@@ -526,8 +475,7 @@ function getPrimitives(x:unknown, values=new Set<Primitive>(), visited=new WeakS
     if(!x||typeof x!=='object'||visited.has(x))return values;
     visited.add(x);
     const visit=(value:unknown)=>getPrimitives(value,values,visited);
-    if(x instanceof Composition) {visit(x.ref);visit(x.of);}
-    else if(Array.isArray(x)) {
+    if(Array.isArray(x)) {
         // Ignorer les noms de prédicats, rôles et variables : ce ne sont pas des valeurs.
         switch(x[0]) {
             case 'var':break;
@@ -537,7 +485,7 @@ function getPrimitives(x:unknown, values=new Set<Primitive>(), visited=new WeakS
             case 'all':case 'exists':
                 if(x.length===3)visit(x[2]);else for(const value of x.slice(1))visit(value);
                 break;
-            case 'est':visit(x[1]);visit(x[3]);break;
+            case 'composition':visit(x[1]);visit(x[3]);break;
             case 'phrase':visit(x[1]);for(const complement of x.slice(3))visit(complement);break;
             case 'contient':
                 if(!(Array.isArray(x[1])&&x[1][0]==='var'&&x[1].length===2))for(const complement of x[1] as unknown[])visit(complement);
@@ -565,24 +513,13 @@ function equal(
         return false;
     }
 
-    // Comparaison des compositions
-
-    if (
-        a instanceof Composition &&
-        b instanceof Composition
-    ) {
-
-        return (
-            equal(a.ref, b.ref) &&
-            equal(a.name, b.name) &&
-            equal(a.of, b.of)
-        );
-    }
-
     // Comparaison des tuples
 
     if (Array.isArray(a) && Array.isArray(b)) {
-
+        // Le quatrième élément absent et undefined ont la même signification.
+        if (a[0] === 'composition' && b[0] === 'composition') {
+            return equal(a[1], b[1]) && equal(a[2], b[2]) && equal(a[3], b[3]);
+        }
         return (
             a.length === b.length &&
             a.every((v, i) => equal(v, b[i]))
@@ -716,7 +653,8 @@ function* bindings(
 function evaluate(
     e: Expression<any>,
     b: Binding,
-    d: Domains
+    d: Domains,
+    types: Variables
 ): boolean {
 
     if (typeof e === "boolean") {
@@ -727,7 +665,7 @@ function evaluate(
 
         case "not":
 
-            return !evaluate(e[1], b, d);
+            return !evaluate(e[1], b, d, types);
 
         case "and":
 
@@ -735,7 +673,8 @@ function evaluate(
                 x => evaluate(
                     x as Expression<any>,
                     b,
-                    d
+                    d,
+                    types
                 )
             );
 
@@ -745,22 +684,23 @@ function evaluate(
                 x => evaluate(
                     x as Expression<any>,
                     b,
-                    d
+                    d,
+                    types
                 )
             );
 
         case "=>":
 
             return (
-                !evaluate(e[1], b, d) ||
-                evaluate(e[2], b, d)
+                !evaluate(e[1], b, d, types) ||
+                evaluate(e[2], b, d, types)
             );
 
         case "switchCase":
             for (const [, condition, result] of e[1]) {
-                if (evaluate(condition, b, d)) return evaluate(result, b, d);
+                if (evaluate(condition, b, d, types)) return evaluate(result, b, d, types);
             }
-            return evaluate(e[2], b, d);
+            return evaluate(e[2], b, d, types);
 
         case "=":
 
@@ -769,16 +709,16 @@ function evaluate(
                 resolve(e[2], b)
             );
 
-        case "est": {
+        case "composition": {
 
             const ref = resolve(e[1], b);
             const of = resolve(e[3], b);
 
             return memoryComposition.some(c =>
 
-                equal(c.ref, ref) &&
-                equal(c.name, e[2]) &&
-                equal(c.of, of)
+                equal(c[1], ref) &&
+                equal(c[2], e[2]) &&
+                equal(c[3], of)
             );
         }
 
@@ -786,7 +726,7 @@ function evaluate(
 
             const subject = resolve(e[1], b);
 
-            const listVariable = e.length===4 && Array.isArray(e[3]) && e[3][0]==='var' && e[3].length===2 && Array.isArray(b.get(e[3][1] as string));
+            const listVariable = e.length===4 && Array.isArray(e[3]) && e[3][0]==='var' && e[3].length===2 && types[e[3][1] as string] === 'complements';
             const complements = resolve(
                 listVariable ? e[3] : e.slice(3),
                 b
@@ -815,7 +755,7 @@ function evaluate(
                 const local of bindings(e[1], d, b)
             ) {
 
-                if (!evaluate(e[2], local, d)) {
+                if (!evaluate(e[2], local, d, { ...types, ...e[1] })) {
                     return false;
                 }
             }
@@ -828,7 +768,7 @@ function evaluate(
                 const local of bindings(e[1], d, b)
             ) {
 
-                if (evaluate(e[2], local, d)) {
+                if (evaluate(e[2], local, d, { ...types, ...e[1] })) {
                     return true;
                 }
             }
@@ -858,7 +798,7 @@ export function query<const T extends Variables, const E extends Expression<NoIn
     validateVocabulary(expression);
 
     for (const type of Object.values(names)) {
-        if (!['Ref', 'Phrase', 'string', 'number', 'boolean', 'complements'].includes(type)) throw new Error('Type de variable invalide');
+        if (!['Ref', 'Phrase', 'Composition', 'string', 'number', 'boolean', 'complements'].includes(type)) throw new Error('Type de variable invalide');
     }
     const primitives = new Set<Primitive>();
     for (const fact of [...memoryComposition, ...memoryRelation]) getPrimitives(fact, primitives);
@@ -866,8 +806,12 @@ export function query<const T extends Variables, const E extends Expression<NoIn
     for (const fact of [...memoryComposition, ...memoryRelation]) {
         for (const value of collectPhrases<Phrase>(fact)) if (!phrases.some(other => equal(value, other))) phrases.push(value);
     }
+    const compositions: Composition[] = [];
+    for (const fact of [...memoryComposition, ...memoryRelation]) {
+        for (const value of collectCompositions<Composition>(fact)) if (!compositions.some(other => equal(value, other))) compositions.push(value);
+    }
     const domains: Domains = {
-        Ref: [...memoryRef()], Phrase: phrases,
+        Ref: [...memoryRef()], Phrase: phrases, Composition: compositions,
         complements: phrases.map(value => value.slice(3) as Complements).filter((value, i, all) => all.findIndex(other => equal(value, other)) === i),
         string: [...primitives].filter((value): value is string => typeof value === 'string'),
         number: [...primitives].filter((value): value is number => typeof value === 'number'),
@@ -879,7 +823,7 @@ export function query<const T extends Variables, const E extends Expression<NoIn
 
     for (const b of bindings(active, domains)) {
 
-        if (evaluate(expression, b, domains)) {
+        if (evaluate(expression, b, domains, names)) {
 
             result.push(
 

@@ -2,9 +2,9 @@
 import ts from 'typescript';
 import * as api from './structure-langage-runtime';
 
-const names = ['Ref','Composition','variable','est','phrase','contient','all','exists','and','or','not','implies','switchCase','eq','select','quantification','query','addMemoryPhrase','addMemoryComposition','deleteReferences','memoryRef','memoryRelation','memoryComposition','print'] as const;
+const names = ['Ref','variable','composition','phrase','contient','all','exists','and','or','not','implies','switchCase','eq','select','quantification','query','addMemoryPhrase','addMemoryComposition','deleteReferences','memoryRef','memoryRelation','memoryComposition','print'] as const;
 const functions = new Map<string,any>(names.map(name => [name, api[name]]));
-const constructors = new Set(['Ref', 'Composition']);
+const constructors = new Set(['Ref']);
 const output:unknown[][] = [];
 functions.set('print', (...args:unknown[]) => { output.push(args); });
 const code = Buffer.from(process.argv[2] || '', 'base64').toString('utf8');

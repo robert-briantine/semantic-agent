@@ -30,7 +30,7 @@ test('Fonctions nommées : paramètres TypeScript, appels anticipés et requête
         }
         function personnes() {
             return query(select({ p: "Ref", n: "string" }, and(
-                est(variable("p"), "Personne"), est(variable("n"), "nom", variable("p"))
+                composition(variable("p"), "Personne"), composition(variable("n"), "nom", variable("p"))
             )));
         }
         print(personnes()[0].n, personnes()[0].p.id === paul.id);

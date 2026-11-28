@@ -14,7 +14,7 @@ for (const [name, api] of [['SQLite', sql], ['RAM', memory]]) {
         t.after(() => name === 'SQLite' ? db.close() : memory.clearMemory());
         return db;
     }
-    const { Ref, switchCase, implies, select, variable, est, phrase, eq, not, exists, all } = api;
+    const { Ref, switchCase, implies, select, variable, composition, phrase, eq, not, exists, all } = api;
 
     test(`${name} : switchCase choisit le premier cas vrai ou le défaut`, t => {
         const db = setup(t);
@@ -41,31 +41,31 @@ for (const [name, api] of [['SQLite', sql], ['RAM', memory]]) {
         db.addMemoryComposition(a, 'Prioritaire');
         db.addMemoryPhrase(b, 'travailler');
         const condition = switchCase([
-            implies(est(variable('p'), 'Prioritaire'), false),
+            implies(composition(variable('p'), 'Prioritaire'), false),
             implies(phrase(variable('p'), 'travailler'), eq(variable('p'), b))
         ], eq(variable('p'), c));
         assert.deepEqual(db.query(select({ p: 'Ref', unused: 'string' }, condition))
             .map(row => [row.p.id, row.unused]).sort(), [[b.id, undefined], [c.id, undefined]].sort());
         const quantified = switchCase([
-            implies(exists({ p: 'Ref' }, est(variable('p'), 'Personne')), true)
+            implies(exists({ p: 'Ref' }, composition(variable('p'), 'Personne')), true)
         ], false);
         assert.deepEqual(db.query(select({ p: 'Ref' }, quantified)), [{ p: undefined }]);
         const universal = all({ p: 'Ref' }, switchCase([
-            implies(est(variable('p'), 'Prioritaire'), eq(variable('p'), a))
+            implies(composition(variable('p'), 'Prioritaire'), eq(variable('p'), a))
         ], not(eq(variable('p'), a))));
         assert.deepEqual(db.query(select({}, universal)), [{}]);
         for (const invalid of [
-            switchCase([implies(est(variable('missing'), 'Personne'), true)], false),
-            switchCase([implies(true, est(variable('missing'), 'Personne'))], false),
-            switchCase([], est(variable('missing'), 'Personne'))
+            switchCase([implies(composition(variable('missing'), 'Personne'), true)], false),
+            switchCase([implies(true, composition(variable('missing'), 'Personne'))], false),
+            switchCase([], composition(variable('missing'), 'Personne'))
         ]) assert.throws(() => db.query(select({}, invalid)), /Variable non déclarée/);
     });
 
     test(`${name} : switchCase stocké conserve les littéraux de chaque cas et du défaut`, t => {
         const db = setup(t), person = new Ref();
         const belief = switchCase([
-            implies(eq('premier', 'premier'), est(7, 'Nombre')),
-            implies(eq('suivant', 'suivant'), est(11, 'Nombre'))
+            implies(eq('premier', 'premier'), composition(7, 'Nombre')),
+            implies(eq('suivant', 'suivant'), composition(11, 'Nombre'))
         ], eq('defaut', false));
         db.addMemoryPhrase(person, 'penser', belief);
         assert.deepEqual(db.query(select({ p: 'Ref' }, phrase(variable('p'), 'penser', belief)))

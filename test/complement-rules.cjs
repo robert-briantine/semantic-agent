@@ -12,7 +12,7 @@ for (const [engine, api] of [['SQLite', sql], ['RAM', memory]]) {
         const db = engine === 'SQLite' ? new sql.Runtime(':memory:') : memory;
         if (engine === 'RAM') memory.clearMemory();
         t.after(() => engine === 'SQLite' ? db.close() : memory.clearMemory());
-        const { Ref, phrase, contient, select, variable, all, exists, and, not, switchCase, implies, eq, est } = api;
+        const { Ref, phrase, contient, select, variable, all, exists, and, not, switchCase, implies, eq, composition } = api;
         const auteur = new Ref(), objet = new Ref();
         const error = /Chaîne interdite comme complément/;
         for (const value of ['rapport', '', ['objet', 'rapport'], ['objet', '']]) {
@@ -46,13 +46,13 @@ for (const [engine, api] of [['SQLite', sql], ['RAM', memory]]) {
         db.addMemoryComposition('Rapport annuel', 'Titre', objet);
         db.addMemoryPhrase(auteur, 'envoyer', objet, 42, false, eq('texte', 'texte'));
         assert.equal(db.query(select({}, phrase(auteur, 'envoyer', objet, 42, false, eq('texte', 'texte')))).length, 1);
-        assert.deepEqual(db.query(select({ titre: 'string' }, est(variable('titre'), 'Titre', objet))), [{ titre: 'Rapport annuel' }]);
+        assert.deepEqual(db.query(select({ titre: 'string' }, composition(variable('titre'), 'Titre', objet))), [{ titre: 'Rapport annuel' }]);
         db.addMemoryPhrase(auteur, 'voir', objet);
         // Le Ref local masque la variable string extérieure.
         assert.deepEqual(db.query(select({ s: 'string' }, exists({ s: 'Ref' }, phrase(auteur, 'voir', s)))), [{ s: undefined }]);
         // La variable string ne sert ici qu'à chercher une composition.
         assert.equal(db.query(select({ s: 'string' }, and(
-            est(s, 'Titre', objet), exists({ autre: 'Ref' }, phrase(auteur, 'voir', variable('autre')))
+            composition(s, 'Titre', objet), exists({ autre: 'Ref' }, phrase(auteur, 'voir', variable('autre')))
         ))).length, 1);
     });
 }
@@ -71,7 +71,7 @@ test('Exécuteur : une chaîne en complément annule toutes les écritures du sc
             assert.equal(result.ok, false);
             assert.match(result.error, /Chaîne interdite comme complément/);
         }
-        assert.deepEqual(run('print(query(select({p:"Ref"},est(variable("p"),"Personne"))));', 'read').output, [[[]]]);
+        assert.deepEqual(run('print(query(select({p:"Ref"},composition(variable("p"),"Personne"))));', 'read').output, [[[]]]);
         const invalidQuery = run('print(query(select({s:"string"},phrase(new Ref(),"dire",variable("s")))));', 'read');
         assert.equal(invalidQuery.ok, false);
         assert.match(invalidQuery.error, /Chaîne interdite comme complément/);

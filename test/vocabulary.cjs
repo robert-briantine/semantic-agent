@@ -43,7 +43,7 @@ for (const [name, library] of [['SQLite', api], ['RAM', memory]]) {
         const runtime = name === 'SQLite' ? new api.Runtime(':memory:') : memory;
         if (name === 'RAM') memory.clearMemory();
         t.after(() => name === 'SQLite' ? runtime.close() : memory.clearMemory());
-        const { Ref, select, variable, phrase, est, contient, all, implies, and } = library;
+        const { Ref, select, variable, phrase, composition, contient, all, implies, and } = library;
         const p = new Ref(), objet = new Ref();
         runtime.addMemoryComposition(p, 'personne');
         runtime.addMemoryComposition(objet, 'voiture');
@@ -58,14 +58,14 @@ for (const [name, library] of [['SQLite', api], ['RAM', memory]]) {
         }
         // Les mots de phrases conservent leur forme : aucun changement de temps implicite.
         assert.deepEqual(runtime.query(select({}, phrase(p, 'manger'))), []);
-        assert.deepEqual(runtime.query(select({ n: 'string' }, est(variable('n'), 'nom', p))), [{ n: 'Nom inventé Zyx' }]);
+        assert.deepEqual(runtime.query(select({ n: 'string' }, composition(variable('n'), 'nom', p))), [{ n: 'Nom inventé Zyx' }]);
         for (const word of ['personne', 'verbeinconnuzyx']) {
             assert.throws(() => runtime.addMemoryPhrase(p, word), /Verbe ou forme conjuguée inconnue/);
             assert.throws(() => runtime.query(['select', {}, ['phrase', p, word]]), /Verbe ou forme conjuguée inconnue/);
         }
         for (const word of ['voitures', 'une voiture', 'nomcommuninconnuzyx']) {
             assert.throws(() => runtime.addMemoryComposition(p, word), /Nom commun inconnu ou non singulier/);
-            assert.throws(() => runtime.query(select({}, est(p, word))), /Nom commun inconnu ou non singulier/);
+            assert.throws(() => runtime.query(select({}, composition(p, word))), /Nom commun inconnu ou non singulier/);
         }
         for (const word of ['objet', 'au', 'prépositioninconnuezyx', '', 'var']) {
             assert.throws(() => runtime.addMemoryPhrase(p, 'parler', [word, objet]), /Préposition ou locution inconnue/);
@@ -73,7 +73,7 @@ for (const [name, library] of [['SQLite', api], ['RAM', memory]]) {
         }
         assert.throws(() => runtime.addMemoryPhrase(p, 'pense', phrase(p, 'verbeinconnuzyx')), /Verbe ou forme conjuguée inconnue/);
         assert.throws(() => runtime.addMemoryPhrase(p, 'pense', all({ x: 'Ref' }, implies(true, phrase(variable('x'), 'verbeinconnuzyx')))), /Verbe ou forme conjuguée inconnue/);
-        assert.throws(() => runtime.query(select({}, and(true, est(p, 'nomcommuninconnuzyx')))), /Nom commun inconnu/);
+        assert.throws(() => runtime.query(select({}, and(true, composition(p, 'nomcommuninconnuzyx')))), /Nom commun inconnu/);
         runtime.addMemoryPhrase(p, 'partir', ['parce que', phrase(objet, 'rouler')]);
         assert.equal(runtime.query(select({}, phrase(p, 'partir', ['parce que', phrase(objet, 'rouler')]))).length, 1);
         // NFC, casse et apostrophe typographique n'empêchent pas la reconnaissance lexicale.

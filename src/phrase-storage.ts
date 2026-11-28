@@ -1,15 +1,28 @@
-// Parcours partagé : chaque tuple de phrase possède une ligne de stockage,
-// y compris lorsqu’il est contenu dans une proposition ou une composition.
+// Parcours partagé : les tuples de phrase et de composition gardent leur contexte,
+// y compris lorsqu’ils sont contenus dans une proposition ou un autre fait.
 // Aucune dépendance aux classes : la librairie RAM possède sa propre classe Ref.
-export function collectPhrases<T extends unknown[] = unknown[]>(value: unknown, result: T[] = [], visited = new WeakSet<object>()): T[] {
+function collectFacts<T extends unknown[]>(kind:'phrase'|'composition',value: unknown, result: T[], visited: WeakSet<object>): T[] {
     if (!value || typeof value !== 'object' || visited.has(value)) return result;
     visited.add(value);
     if (Array.isArray(value)) {
-        if (value[0] === 'phrase' && value.length >= 3) result.push(value as T);
-        for (const child of value) collectPhrases(child, result, visited);
-    } else if ('ref' in value && 'of' in value) {
-        collectPhrases(value.ref, result, visited);
-        collectPhrases(value.of, result, visited);
+        if (value[0] === kind && value.length >= 3) result.push(value as T);
+        for (const child of value) collectFacts(kind,child,result,visited);
     }
     return result;
+}
+
+export function collectPhrases<T extends unknown[] = unknown[]>(value:unknown,result:T[]=[],visited=new WeakSet<object>()):T[] {
+    return collectFacts('phrase',value,result,visited);
+}
+export function collectCompositions<T extends unknown[] = unknown[]>(value:unknown,result:T[]=[],visited=new WeakSet<object>()):T[] {
+    return collectFacts('composition',value,result,visited);
+}
+
+// Canoniser l’argument optionnel, également dans les tuples bruts imbriqués.
+// Les objets Ref sont conservés par identité.
+export function normalizeFactTuples<T>(value:T):T {
+    if(!Array.isArray(value))return value;
+    const result=value.map(normalizeFactTuples);
+    if(result[0]==='composition'&&result.length===4&&result[3]===undefined)result.pop();
+    return result as T;
 }

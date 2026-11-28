@@ -33,6 +33,7 @@ export function inspectDatabase(path: string, request: { action: 'tables' } | { 
             ), affected AS (
                 SELECT fact_type,fact_id FROM matched
                 UNION SELECT 'phrase',p.id FROM phrases p JOIN matched m ON p.owner_type=m.fact_type AND p.owner_id=m.fact_id
+                UNION SELECT 'composition',c.id FROM compositions c JOIN matched m ON c.owner_type=m.fact_type AND c.owner_id=m.fact_id
             ) SELECT fact_type,count(*) AS n FROM affected GROUP BY fact_type`).all(values);
             const existingRefs=Number(db.prepare('SELECT count(*) AS n FROM refs WHERE value IN (SELECT value FROM json_each(?))').get(values)!.n);
             const totals={compositions:Number(counts.find(row=>row.fact_type==='composition')?.n??0),phrases:Number(counts.find(row=>row.fact_type==='phrase')?.n??0)};

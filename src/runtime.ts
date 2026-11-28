@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import { Ref, phrase, Composition, Element, Complements, Query, QueryResult, Variables } from './structure-langage';
-import type { Phrase } from './structure-langage';
-import { collectPhrases } from './phrase-storage';
+import { Ref, phrase, composition, Element, Complements, Query, QueryResult, Variables } from './structure-langage';
+import type { Phrase, Composition } from './structure-langage';
+import { collectPhrases, collectCompositions } from './phrase-storage';
 import type { Expression, VariableTypes } from './structure-langage';
 import { usedVariables } from './query-variables';
 import { validateComplementUsage } from './validate-complements';
@@ -13,8 +13,7 @@ type Enc = null | boolean | number | string | Enc[] | { [key:string]: Enc };
 function encode(x: unknown): Enc {
     if (x === undefined) return { $undefined: true };
     if (x instanceof Ref) return { $ref: x.id };
-    if (x instanceof Composition) return { $composition: [encode(x.ref), encode(x.name), encode(x.of)] };
-    if (Array.isArray(x)) return x.map(encode);
+    if (Array.isArray(x)) return (x[0]==='composition'&&x.length===4&&x[3]===undefined?x.slice(0,3):x).map(encode);
     if (x === null || typeof x === 'string' || typeof x === 'boolean') return x;
     if (typeof x === 'number' && Number.isFinite(x)) return x;
     if (typeof x === 'object' && x) return Object.fromEntries(Object.keys(x).sort().map(k => [k, encode((x as Record<string,unknown>)[k])]));
@@ -33,6 +32,8 @@ function decode(x:any):any {
     if (Array.isArray(x)) {
         const values = x.map(decode);
         if (values[0] === 'fait' && values.length >= 3) values[0] = 'phrase';
+        if (values[0] === 'est' && values.length >= 3) values[0] = 'composition';
+        if (values[0] === 'composition' && values.length===4 && values[3]===undefined) values.pop();
         return values;
     }
     if (x && typeof x === 'object') {
@@ -43,14 +44,16 @@ function decode(x:any):any {
             const [subject,name,complements] = x.$phrase.map(decode);
             return ['phrase', subject, name, ...(complements ?? [])];
         }
-        if ('$composition' in x) return new Composition(...(x.$composition.map(decode) as [any,any,any]));
+        if ('$composition' in x) {
+            const [ref,name,of]=x.$composition.map(decode);
+            return of===undefined?['composition',ref,name]:['composition',ref,name,of];
+        }
         return Object.fromEntries(Object.entries(x).map(([k,v])=>[k,decode(v)]));
     }
     return x;
 }
 export function validateVariables(x:unknown, scope=new Set<string>()):void {
-    if (x instanceof Composition) { validateVariables(x.ref,scope); validateVariables(x.of,scope); }
-    else if (Array.isArray(x)) {
+    if (Array.isArray(x)) {
         if (x[0]==='var' && x.length===2 && typeof x[1]==='string') { if (!scope.has(x[1])) throw new Error('Variable non déclarée : '+x[1]); }
         else if ((x[0]==='all'||x[0]==='exists') && x.length===3 && x[1] && typeof x[1]==='object' && !Array.isArray(x[1])) {
             validateVariables(x[2],new Set([...scope,...Object.keys(x[1])]));
@@ -61,7 +64,6 @@ export function getRefs(x:unknown,set:Set<Ref>,visited=new WeakSet<object>()):vo
     if (x instanceof Ref) { set.add(x); return; }
     if (!x || typeof x!=='object' || visited.has(x)) return; visited.add(x);
     if (Array.isArray(x)) for (const e of x) getRefs(e,set,visited);
-    else if (x instanceof Composition) {getRefs(x.ref,set,visited);getRefs(x.of,set,visited);}
 }
 type Scope = Map<string,{value:string; type:keyof VariableTypes; phraseId?:string}>;
 // Les tuples de deux éléments représentant une expression restent des éléments nus.
@@ -74,8 +76,7 @@ function getPrimitives(x:unknown, values=new Set<Primitive>(), visited=new WeakS
     if(!x||typeof x!=='object'||visited.has(x))return values;
     visited.add(x);
     const visit=(value:unknown)=>getPrimitives(value,values,visited);
-    if(x instanceof Composition) {visit(x.ref);visit(x.of);}
-    else if(Array.isArray(x)) {
+    if(Array.isArray(x)) {
         // Ignorer les noms de prédicats, rôles et variables : ce ne sont pas des valeurs.
         switch(x[0]) {
             case 'var':break;
@@ -85,7 +86,7 @@ function getPrimitives(x:unknown, values=new Set<Primitive>(), visited=new WeakS
             case 'all':case 'exists':
                 if(x.length===3)visit(x[2]);else for(const value of x.slice(1))visit(value);
                 break;
-            case 'est':visit(x[1]);visit(x[3]);break;
+            case 'composition':visit(x[1]);visit(x[3]);break;
             case 'phrase':visit(x[1]);for(const complement of x.slice(3))visit(complement);break;
             case 'contient':
                 if(!(Array.isArray(x[1])&&x[1][0]==='var'&&x[1].length===2))for(const complement of x[1] as unknown[])visit(complement);
@@ -110,6 +111,7 @@ class Compiler {
             switch(type) {
                 case 'Ref':domain='refs';break;
                 case 'Phrase':domain='phrases';break;
+                case 'Composition':domain='compositions';break;
                 case 'complements':domain='(SELECT id AS idPhrase, complements AS value FROM phrases)';break;
                 case 'string':case 'number':case 'boolean':
                     domain=`(SELECT value FROM primitive_values WHERE type='${type}')`;break;
@@ -121,12 +123,13 @@ class Compiler {
     }
     term(x:any,s:Scope):string {
         if(Array.isArray(x)) {
+            if(x[0]==='composition'&&x.length===4&&x[3]===undefined)x=x.slice(0,3);
             if(x[0]==='var'&&x.length===2&&s.has(x[1])) return s.get(x[1])!.value;
             if((x[0]==='all'||x[0]==='exists')&&x.length===3&&x[1]&&typeof x[1]==='object'&&!Array.isArray(x[1])) {
                 const local=new Map(s);for(const k of Object.keys(x[1]))local.delete(k);
                 return `json_array(json(${this.param(x[0])}),json(${this.param(x[1])}),json(${this.term(x[2],local)}))`;
             }
-            return `json_array(${x.map(e=>`json(${this.term(e,s)})`).join(',')})`;
+            return `json_array(${x.map((e:any)=>`json(${this.term(e,s)})`).join(',')})`;
         }
         return this.param(x);
     }
@@ -142,7 +145,7 @@ class Compiler {
                 return `(CASE ${cases} ELSE ${this.expr(e[2],s)} END)`;
             }
             case '=':return `(${this.term(e[1],s)} = ${this.term(e[2],s)})`;
-            case 'est':return `EXISTS (SELECT 1 FROM compositions c WHERE ${this.predicate('c',e[2])} AND c.ref=${this.term(e[1],s)} AND c.of_value=${this.term(e[3],s)})`;
+            case 'composition':return `EXISTS (SELECT 1 FROM compositions c WHERE c.owner_type IS NULL AND ${this.predicate('c',e[2])} AND c.ref=${this.term(e[1],s)} AND c.of_value=${this.term(e[3],s)})`;
             case 'phrase':{
                 const binding=e.length===4 && Array.isArray(e[3]) && e[3][0]==='var' && e[3].length===2 ? s.get(e[3][1]) : undefined;
                 return `EXISTS (SELECT 1 FROM phrases f WHERE f.owner_type IS NULL AND ${this.predicate('f',e[2])} AND f.subject=${this.term(e[1],s)} AND f.complements=${this.term(binding?.type==='complements'?e[3]:e.slice(3),s)})`;
@@ -164,7 +167,7 @@ class Compiler {
     }
     compile(q:Query<any>) {
         const [,names,e]=q;
-        for(const type of Object.values(names)) if(!['Ref','Phrase','string','number','boolean','complements'].includes(type as string)) throw new Error('Type de variable invalide');
+        for(const type of Object.values(names)) if(!['Ref','Phrase','Composition','string','number','boolean','complements'].includes(type as string)) throw new Error('Type de variable invalide');
         const used=usedVariables(e);
         const active=Object.fromEntries(Object.entries(names).filter(([name])=>used.has(name))) as Variables;
         const d=this.domains(active,new Map());
@@ -181,7 +184,9 @@ export class Runtime {
     constructor(path:string) {
         this.db=new DatabaseSync(path);this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA recursive_triggers=ON;
         CREATE TABLE IF NOT EXISTS refs(value TEXT PRIMARY KEY);
-        CREATE TABLE IF NOT EXISTS compositions(id INTEGER PRIMARY KEY, ref TEXT NOT NULL,name TEXT NOT NULL,of_value TEXT NOT NULL, value TEXT NOT NULL,qualifier TEXT);
+        CREATE TABLE IF NOT EXISTS compositions(id INTEGER PRIMARY KEY, ref TEXT NOT NULL,name TEXT NOT NULL,of_value TEXT NOT NULL, value TEXT NOT NULL,qualifier TEXT,
+            owner_type TEXT CHECK(owner_type IN ('composition','phrase')),owner_id INTEGER,
+            CHECK((owner_type IS NULL) = (owner_id IS NULL)));
         CREATE TABLE IF NOT EXISTS phrases(id INTEGER PRIMARY KEY, subject TEXT NOT NULL,name TEXT NOT NULL,complements TEXT NOT NULL,value TEXT NOT NULL,qualifier TEXT,
             owner_type TEXT CHECK(owner_type IN ('composition','phrase')),owner_id INTEGER,
             CHECK((owner_type IS NULL) = (owner_id IS NULL)));`);
@@ -255,12 +260,13 @@ export class Runtime {
         // Migrer les anciennes représentations dans une seule transaction, sans
         // purger les faits ni leurs index. Les identifiants existants sont conservés.
         try {
-            if (!this.db.prepare("SELECT 1 FROM pragma_table_info('phrases') WHERE name='owner_type'").get()) this.transaction(()=>{
-                this.db.exec('ALTER TABLE phrases ADD COLUMN owner_type TEXT; ALTER TABLE phrases ADD COLUMN owner_id INTEGER;');
-                this.createPhraseOwnership();
-                this.migratePhrases();
+            const legacyOwners=['compositions','phrases'].filter(table=>!this.db.prepare('SELECT 1 FROM pragma_table_info(?) WHERE name=?').get(table,'owner_type'));
+            if (legacyOwners.length) this.transaction(()=>{
+                for(const table of legacyOwners)this.db.exec(`ALTER TABLE ${table} ADD COLUMN owner_type TEXT; ALTER TABLE ${table} ADD COLUMN owner_id INTEGER;`);
+                this.createFactOwnership();
+                this.migrateFacts();
             });
-            else this.createPhraseOwnership();
+            else this.createFactOwnership();
         } catch (error) {this.db.close();throw error;}
     }
     transaction<T>(f:()=>T):T {this.db.exec('BEGIN IMMEDIATE');this.writing=true;try{const r=f();this.db.exec('COMMIT');return r;}catch(e){this.db.exec('ROLLBACK');throw e;}finally{this.writing=false;}}
@@ -281,14 +287,29 @@ export class Runtime {
         for(const ref of refs) insert.run('Ref',pack(ref),type,id);
         for(const value of getPrimitives(fact)) insert.run(typeof value,pack(value),type,id);
     }
-    private createPhraseOwnership():void {
+    private createFactOwnership():void {
         this.db.exec(`CREATE INDEX IF NOT EXISTS phrase_owner ON phrases(owner_type,owner_id);
+        CREATE INDEX IF NOT EXISTS composition_owner ON compositions(owner_type,owner_id);
+        CREATE TRIGGER IF NOT EXISTS compositions_delete_compositions AFTER DELETE ON compositions BEGIN
+            DELETE FROM compositions WHERE owner_type='composition' AND owner_id=OLD.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS phrases_delete_compositions AFTER DELETE ON phrases BEGIN
+            DELETE FROM compositions WHERE owner_type='phrase' AND owner_id=OLD.id;
+        END;
         CREATE TRIGGER IF NOT EXISTS compositions_delete_phrases AFTER DELETE ON compositions BEGIN
             DELETE FROM phrases WHERE owner_type='composition' AND owner_id=OLD.id;
         END;
         CREATE TRIGGER IF NOT EXISTS phrases_delete_phrases AFTER DELETE ON phrases BEGIN
             DELETE FROM phrases WHERE owner_type='phrase' AND owner_id=OLD.id;
         END;`);
+    }
+    private insertComposition(value:Composition,ownerType:'composition'|'phrase'|null=null,ownerId:number|null=null):number {
+        const [text,qualifier]=nameParts(value[2]);
+        const row=this.db.prepare('INSERT INTO compositions(ref,name,of_value,value,qualifier,owner_type,owner_id) VALUES (?,?,?,?,?,?,?)')
+            .run(pack(value[1]),text,pack(value[3]),pack(value),qualifier,ownerType,ownerId);
+        const id=Number(row.lastInsertRowid);
+        this.storeRefs(value);this.storePrimitives(value);this.storeArguments('composition',id,value);
+        return id;
     }
     private insertPhrase(value:Phrase,ownerType:'composition'|'phrase'|null=null,ownerId:number|null=null):number {
         const [text,qualifier]=nameParts(value[2]), complements=value.slice(3) as Complements;
@@ -298,33 +319,39 @@ export class Runtime {
         this.storeRefs(value);this.storePrimitives(value);this.storeComplements(id,complements);this.storeArguments('phrase',id,value);
         return id;
     }
-    private storeNestedPhrases(value:unknown,ownerType:'composition'|'phrase',ownerId:number):void {
-        const stored=new Set<string>();
-        for (const nested of collectPhrases<Phrase>(value)) {
-            if (nested===value && ownerType==='phrase') continue;
+    private storeNestedFacts(value:unknown,ownerType:'composition'|'phrase',ownerId:number):void {
+        const phrases=new Set(this.db.prepare('SELECT value FROM phrases WHERE owner_type=? AND owner_id=?').all(ownerType,ownerId).map(row=>String(row.value)));
+        const compositions=new Set(this.db.prepare('SELECT value FROM compositions WHERE owner_type=? AND owner_id=?').all(ownerType,ownerId).map(row=>String(row.value)));
+        for(const nested of collectPhrases<Phrase>(value)) {
+            if(nested===value&&ownerType==='phrase')continue;
             const key=pack(nested);
-            if (!stored.has(key)) {this.insertPhrase(nested,ownerType,ownerId);stored.add(key);}
+            if(!phrases.has(key)){this.insertPhrase(nested,ownerType,ownerId);phrases.add(key);}
+        }
+        for(const nested of collectCompositions<Composition>(value)) {
+            if(nested===value&&ownerType==='composition')continue;
+            const key=pack(nested);
+            if(!compositions.has(key)){this.insertComposition(nested,ownerType,ownerId);compositions.add(key);}
         }
     }
-    private migratePhrases():void {
-        const compositions=this.db.prepare('SELECT id,value FROM compositions').all();
-        const phrases=this.db.prepare('SELECT id,value FROM phrases').all();
+    private migrateFacts():void {
+        const compositions=this.db.prepare('SELECT id,value,owner_type FROM compositions').all();
+        const phrases=this.db.prepare('SELECT id,value,owner_type FROM phrases').all();
         for (const row of compositions) {
             const value=decode(JSON.parse(String(row.value))) as Composition;
-            this.db.prepare('UPDATE compositions SET ref=?,of_value=?,value=? WHERE id=?').run(pack(value.ref),pack(value.of),pack(value),row.id);
+            this.db.prepare('UPDATE compositions SET ref=?,of_value=?,value=? WHERE id=?').run(pack(value[1]),pack(value[3]),pack(value),row.id);
             this.storeArguments('composition',Number(row.id),value);this.storePrimitives(value);this.storeRefs(value);
-            this.storeNestedPhrases(value,'composition',Number(row.id));
         }
         for (const row of phrases) {
             const value=decode(JSON.parse(String(row.value))) as Phrase;
             this.db.prepare('UPDATE phrases SET subject=?,complements=?,value=? WHERE id=?').run(pack(value[1]),pack(value.slice(3)),pack(value),row.id);
             this.storeComplements(Number(row.id),value.slice(3) as Complements);
             this.storeArguments('phrase',Number(row.id),value);this.storePrimitives(value);this.storeRefs(value);
-            this.storeNestedPhrases(value,'phrase',Number(row.id));
         }
+        for(const row of compositions)if(row.owner_type===null)this.storeNestedFacts(decode(JSON.parse(String(row.value))),'composition',Number(row.id));
+        for(const row of phrases)if(row.owner_type===null)this.storeNestedFacts(decode(JSON.parse(String(row.value))),'phrase',Number(row.id));
     }
-    addMemoryComposition(ref:Element|string|number,name:Composition['name'],of?:Element):void {this.atomic(()=>{const c=new Composition(ref,name,of);validateVariables(c);validateComplementUsage(c);validateVocabulary(c,this.wordKnown);this.storeRefs(c);this.storePrimitives(c);const [text,qualifier]=nameParts(name);const row=this.db.prepare('INSERT INTO compositions(ref,name,of_value,value,qualifier) VALUES (?,?,?,?,?)').run(pack(ref),text,pack(of),pack(c),qualifier);const id=Number(row.lastInsertRowid);this.storeArguments('composition',id,c);this.storeNestedPhrases(c,'composition',id);});}
-    addMemoryPhrase(subject:Element|undefined,name:Phrase[2],...complements:Complements):Phrase {return this.atomic(()=>{const p=phrase(subject,name,...complements);validateVariables(p);validateComplementUsage(p);validateVocabulary(p,this.wordKnown);const id=this.insertPhrase(p);this.storeNestedPhrases(p,'phrase',id);return p;});}
+    addMemoryComposition(ref:Element|string|number,name:Composition[2],of?:Element):Composition {return this.atomic(()=>{const c=composition(ref,name,of);validateVariables(c);validateComplementUsage(c);validateVocabulary(c,this.wordKnown);const id=this.insertComposition(c);this.storeNestedFacts(c,'composition',id);return c;});}
+    addMemoryPhrase(subject:Element|undefined,name:Phrase[2],...complements:Complements):Phrase {return this.atomic(()=>{const p=phrase(subject,name,...complements);validateVariables(p);validateComplementUsage(p);validateVocabulary(p,this.wordKnown);const id=this.insertPhrase(p);this.storeNestedFacts(p,'phrase',id);return p;});}
     deleteReference(id:string) {
         return this.atomic(()=>{
             const value=pack(new Ref(id));
@@ -335,9 +362,11 @@ export class Runtime {
                 WHERE target.type='Ref' AND target.value=?`).run(value);
             this.db.prepare("INSERT OR IGNORE INTO deletion_candidates VALUES ('Ref',?)").run(value);
             const before=Number(this.db.prepare('SELECT count(*) AS n FROM phrases').get()!.n);
-            const compositions=Number(this.db.prepare("DELETE FROM compositions WHERE id IN (SELECT fact_id FROM fact_arguments WHERE type='Ref' AND value=? AND fact_type='composition')").run(value).changes);
+            const beforeCompositions=Number(this.db.prepare('SELECT count(*) AS n FROM compositions').get()!.n);
+            this.db.prepare("DELETE FROM compositions WHERE id IN (SELECT fact_id FROM fact_arguments WHERE type='Ref' AND value=? AND fact_type='composition')").run(value);
             this.db.prepare("DELETE FROM phrases WHERE id IN (SELECT fact_id FROM fact_arguments WHERE type='Ref' AND value=? AND fact_type='phrase')").run(value);
             const phrases=before-Number(this.db.prepare('SELECT count(*) AS n FROM phrases').get()!.n);
+            const compositions=beforeCompositions-Number(this.db.prepare('SELECT count(*) AS n FROM compositions').get()!.n);
             const refs=Number(this.db.prepare(`DELETE FROM refs WHERE value IN (SELECT value FROM deletion_candidates WHERE type='Ref')
                 AND NOT EXISTS (SELECT 1 FROM fact_arguments a WHERE a.type='Ref' AND a.value=refs.value)`).run().changes);
             const primitiveValues=Number(this.db.prepare(`DELETE FROM primitive_values WHERE (type,value) IN (SELECT type,value FROM deletion_candidates WHERE type<>'Ref')
@@ -360,7 +389,7 @@ export class Runtime {
     query<const T extends Variables,const E extends Expression<NoInfer<T>>>(q:Query<T,E>):QueryResult<T,E>[] {const {sql,params}=compileQuery(q,this.wordKnown);const rows=this.db.prepare(sql).all(params);return rows.map(row=>Object.fromEntries(Object.keys(q[1]).map((k,i)=>[k,decode(JSON.parse(String(row['c'+i])))])) as QueryResult<T,E>);}
     memoryRef():Set<Ref>{return new Set(this.db.prepare('SELECT value FROM refs').all().map(r=>decode(JSON.parse(String(r.value)))));}
     get memoryRelation():Phrase[]{return this.db.prepare('SELECT value FROM phrases WHERE owner_type IS NULL ORDER BY id').all().map(r=>decode(JSON.parse(String(r.value))));}
-    get memoryComposition():Composition[]{return this.db.prepare('SELECT value FROM compositions ORDER BY id').all().map(r=>decode(JSON.parse(String(r.value))));}
+    get memoryComposition():Composition[]{return this.db.prepare('SELECT value FROM compositions WHERE owner_type IS NULL ORDER BY id').all().map(r=>decode(JSON.parse(String(r.value))));}
     close(){this.db.close();}
 }
 export function print(...values:unknown[]){console.log(...values);}

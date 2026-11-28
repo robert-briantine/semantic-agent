@@ -3,7 +3,7 @@ import { Ref } from './structure-langage';
 import type { Element, Composition, Phrase, Complements, Variables, Query, Expression } from './structure-langage';
 export * from './runtime';
 const runtime = new Runtime(process.env.MEMORY_DB || 'memory.sqlite');
-export const addMemoryComposition = (ref:Element|string|number,name:Composition['name'],of?:Element) => runtime.addMemoryComposition(ref,name,of);
+export const addMemoryComposition = (ref:Element|string|number,name:Composition[2],of?:Element) => runtime.addMemoryComposition(ref,name,of);
 export const addMemoryPhrase = (subject:Element|undefined,name:Phrase[2],...complements:Complements) => runtime.addMemoryPhrase(subject,name,...complements);
 export const query = <const T extends Variables,const E extends Expression<NoInfer<T>>>(q:Query<T,E>) => runtime.query(q);
 export const memoryRef = () => runtime.memoryRef();

@@ -1,4 +1,5 @@
 import { validateComplementUsage } from '../src/validate-complements';
+import { normalizeFactTuples } from '../src/phrase-storage';
 import { randomUUID } from "node:crypto";
 
 declare const refBrand: unique symbol;
@@ -44,6 +45,7 @@ export type Preposition = string;
 export type VariableTypes = {
     Ref: Ref;
     Phrase: Phrase;
+    Composition: Composition;
     string: string;
     number: number;
     boolean: boolean;
@@ -67,13 +69,10 @@ export type Phrase<T extends Variables = {}> = [
     "phrase", Element<T> | undefined, Verbe | [Verbe, Qualificatif], ...Complement<T>[]
 ];
 
-export class Composition<T extends Variables = {}> {
-    constructor(
-        public ref: Element<T> | string | number,
-        public name: NomCommun | [NomCommun, Qualificatif],
-        public of?: Element<T>
-    ) {}
-}
+/** Représentation unique d’une composition, également utilisable comme expression. */
+export type Composition<T extends Variables = {}> = [
+    "composition", Element<T> | string | number, NomCommun | [NomCommun, Qualificatif], Element<T>?
+];
 
 export type Q<T extends Variables, Parent extends Variables = {}> = [
     "all" | "exists", T, Expression<Omit<Parent, keyof T> & T>
@@ -89,20 +88,19 @@ export type Expression<T extends Variables = {}> =
     | ["=", Element<T>, Element<T>]
     | ["contient", Complements<T> | Variable<T>, Complement<T>]
     | Phrase<T>
-    | ["est", Element<T> | string | number,
-        NomCommun | [NomCommun, Qualificatif], Element<T>?]
+    | Composition<T>
     | ["all" | "exists", Variables, Expression<any>];
 
 export type Prop<T extends Variables = {}> = Expression<T>;
 
 export function quantification<const T extends Variables, E extends Expression<any>>(q: ["all" | "exists", T, E]): ["all" | "exists", T, E] { return q; }
+
 export type Query<T extends Variables, E extends Expression<NoInfer<T>> = Expression<NoInfer<T>>> = ["select", T, E];
 export type UsedVariableKeys<E, Depth extends unknown[] = []> =
     Depth['length'] extends 12 ? string :
     0 extends (1 & E) ? string :
     E extends readonly ["var", infer K extends string] ? K :
     E extends readonly ["all" | "exists", infer Local, infer Body] ? string extends keyof Local ? string : Exclude<UsedVariableKeys<Body, [...Depth, unknown]>, keyof Local> :
-    E extends Composition<any> ? string :
     E extends readonly unknown[] ? UsedVariableKeys<E[number], [...Depth, unknown]> : never;
 export type QueryResult<T extends Variables, E = unknown> = {
     -readonly [K in keyof T]: unknown extends E ? VariableTypes[T[K]] | undefined :
@@ -135,13 +133,16 @@ export function switchCase<const Cases extends ["=>", Expression<any>, Expressio
 export function eq<A extends Element<any>, B extends Element<any>>(a: A, b: B): ["=", A, B] {
     return ["=", a, b];
 }
-export function est<R extends Element<any> | string | number, N extends Composition["name"]>(ref: R, name: N): ["est", R, N];
-export function est<R extends Element<any> | string | number, N extends Composition["name"], O extends Element<any> | undefined>(ref: R, name: N, of: O): ["est", R, N, O];
-export function est(ref: Element<any> | string | number, name: Composition["name"], of?: Element<any>): ["est", Element<any> | string | number, Composition["name"], Element<any>?] {
-    return arguments.length === 2 ? ["est", ref, name] : ["est", ref, name, of];
+export function composition<R extends Element<any> | string | number, N extends Composition[2]>(ref: R, name: N): ["composition", R, N];
+export function composition<R extends Element<any> | string | number, N extends Composition[2], O extends Element<any> | undefined>(ref: R, name: N, of: O): O extends undefined ? ["composition", R, N] : ["composition", R, N, O];
+export function composition(ref: Element<any> | string | number, name: Composition[2], of?: Element<any>): Composition<any> {
+    const expression = normalizeFactTuples<Composition<any>>(of === undefined ? ["composition", ref, name] : ["composition", ref, name, of]);
+    validateComplementUsage(expression);
+    return expression;
 }
+
 export function phrase<S extends Element<any> | undefined, N extends Phrase[2], C extends Complements<any>>(subject: S, name: N, ...complements: C): ["phrase", S, N, ...C] {
-    const expression: ["phrase", S, N, ...C] = ["phrase", subject, name, ...complements];
+    const expression = normalizeFactTuples<["phrase", S, N, ...C]>(["phrase", subject, name, ...complements]);
     validateComplementUsage(expression);
     return expression;
 }
@@ -161,7 +162,7 @@ export function select<const T extends Variables, const E extends Expression<NoI
 }
 
 // Fonctions injectées dans le programme (aucun import à écrire).
-export declare function addMemoryComposition(ref:Element|string|number,name:Composition['name'],of?:Element):void;
+export declare function addMemoryComposition(ref:Element|string|number,name:Composition[2],of?:Element):Composition;
 export declare function addMemoryPhrase(subject:Element|undefined,name:Phrase[2],...complements:Complements):Phrase;
 export declare function query<const T extends Variables,const E extends Expression<NoInfer<T>>>(q:Query<T,E>):QueryResult<T,E>[];
 export declare function memoryRef():Set<Ref>;
