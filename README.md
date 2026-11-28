@@ -66,6 +66,18 @@ La table `Complement(idPhrase, ordre, motClef, Element)` indexe chaque compléme
 
 Dans `select`, une variable déclarée mais absente des occurrences libres de la condition vaut `undefined` dans chaque résultat. Son domaine n’est pas parcouru : `select({p:"Ref",n:"string"},composition(variable("p"),"Personne"))` renvoie les personnes avec `n: undefined`, même si aucune chaîne n’est enregistrée. Une variable utilisée uniquement sous un quantificateur qui redéclare son nom reste inutilisée dans le `select` extérieur. Les variables réellement utilisées continuent à imposer leurs conditions : chercher aussi un `Nom` ne renvoie que les personnes ayant ce nom enregistré.
 
+TypeScript et Monaco vérifient les portées à la construction de `select` et pour les tuples transmis directement à `query`. `all` et `exists` peuvent utiliser leurs variables locales et celles des portées englobantes ; un nom non déclaré ou une variable utilisée hors de son quantificateur produit une erreur de type. Les helpers conservent les noms littéraux pour permettre cette vérification, y compris dans les tuples bruts. Les expressions dynamiques ou dépassant la profondeur d’analyse statique restent vérifiées à l’exécution.
+
+```ts
+select({ parent: "Ref" }, all({ enfant: "Ref" },
+    phrase(variable("parent"), "aide", variable("enfant"))
+)); // Valide : parent vient de select, enfant de all.
+
+select({}, all({ enfant: "Ref" },
+    phrase(variable("parent"), "aide", variable("enfant"))
+)); // Erreur TypeScript : parent n’est pas déclaré.
+```
+
 Cette règle s’applique aussi aux conditions constantes : `query(select({n:"string"},true))` renvoie `[{n:undefined}]`. Pour énumérer toutes les valeurs d’un domaine, utiliser explicitement la variable, par exemple `query(select({n:"string"},eq(variable("n"),variable("n"))))`. Les domaines des variables locales de `all` et `exists` conservent leur sémantique habituelle. Les types TypeScript distinguent les variables utilisées et inutilisées lorsque l’expression est connue ; une expression dynamique ou un objet de phrase conserve un type pouvant inclure `undefined`.
 
 Le runtime renvoie de vrais `undefined`. Dans le JSON de `POST /api/execute`, les propriétés `undefined` sont représentées par `{"$undefined":true}` pour conserver les colonnes ; la console affiche ce marqueur comme `undefined`. Le JSON brut reste un JSON valide avec ce marqueur explicite.

@@ -93,15 +93,25 @@ export type Expression<T extends Variables = {}> =
 
 export type Prop<T extends Variables = {}> = Expression<T>;
 
-export function quantification<const T extends Variables, E extends Expression<any>>(q: ["all" | "exists", T, E]): ["all" | "exists", T, E] { return q; }
+export function quantification<const T extends Variables, const E extends Expression<any>>(q: ["all" | "exists", T, E]): ["all" | "exists", T, E] { return q; }
 
-export type Query<T extends Variables, E extends Expression<NoInfer<T>> = Expression<NoInfer<T>>> = ["select", T, E];
+export type Query<T extends Variables, E extends Expression<NoInfer<T>> = Expression<NoInfer<T>>> = ["select", T, E & VariableScope<T, NoInfer<E>>];
 export type UsedVariableKeys<E, Depth extends unknown[] = []> =
-    Depth['length'] extends 12 ? string :
+    Depth['length'] extends 32 ? string :
     0 extends (1 & E) ? string :
+    Expression<{}> extends E ? string :
     E extends readonly ["var", infer K extends string] ? K :
     E extends readonly ["all" | "exists", infer Local, infer Body] ? string extends keyof Local ? string : Exclude<UsedVariableKeys<Body, [...Depth, unknown]>, keyof Local> :
     E extends readonly unknown[] ? UsedVariableKeys<E[number], [...Depth, unknown]> : never;
+/** Vérifie les variables libres une fois la portée complète connue (select/query).
+ * Les quantificateurs retirent leurs variables locales via UsedVariableKeys.
+ * Une expression dynamique ou dépassant la profondeur d’analyse reste contrôlée à l’exécution.
+ */
+export type VariableScope<T extends Variables, E> =
+    string extends UsedVariableKeys<E> ? unknown :
+    Exclude<UsedVariableKeys<E>, keyof T> extends never ? unknown : {
+        readonly "Variables non déclarées": Exclude<UsedVariableKeys<E>, keyof T>
+    };
 export type QueryResult<T extends Variables, E = unknown> = {
     -readonly [K in keyof T]: unknown extends E ? VariableTypes[T[K]] | undefined :
         string extends UsedVariableKeys<E> ? VariableTypes[T[K]] | undefined :
@@ -114,50 +124,51 @@ export function variable<const K extends string>(name: K): ["var", K] {
 }
 
 
-export function not<E extends Expression<any>>(e: E): ["not", E] {
+export function not<const E extends Expression<any>>(e: E): ["not", E] {
     return ["not", e];
 }
-export function and<E extends Expression<any>[]>(...es: E): ["and", ...E] {
+export function and<const E extends Expression<any>[]>(...es: E): ["and", ...E] {
     return ["and", ...es];
 }
-export function or<E extends Expression<any>[]>(...es: E): ["or", ...E] {
+export function or<const E extends Expression<any>[]>(...es: E): ["or", ...E] {
     return ["or", ...es];
 }
-export function implies<A extends Expression<any>, B extends Expression<any>>(a: A, b: B): ["=>", A, B] {
+export function implies<const A extends Expression<any>, const B extends Expression<any>>(a: A, b: B): ["=>", A, B] {
     return ["=>", a, b];
 }
 // La première condition vraie détermine le résultat ; sinon, utiliser d.
-export function switchCase<const Cases extends ["=>", Expression<any>, Expression<any>][], C extends Expression<any>>(cases:Cases,d:C): ["switchCase",Cases,C] {
+export function switchCase<const Cases extends ["=>", Expression<any>, Expression<any>][], const C extends Expression<any>>(cases:Cases,d:C): ["switchCase",Cases,C] {
     return ["switchCase", cases, d];
 }
-export function eq<A extends Element<any>, B extends Element<any>>(a: A, b: B): ["=", A, B] {
+export function eq<const A extends Element<any>, const B extends Element<any>>(a: A, b: B): ["=", A, B] {
     return ["=", a, b];
 }
-export function composition<R extends Element<any> | string | number, N extends Composition[2]>(ref: R, name: N): ["composition", R, N];
-export function composition<R extends Element<any> | string | number, N extends Composition[2], O extends Element<any> | undefined>(ref: R, name: N, of: O): O extends undefined ? ["composition", R, N] : ["composition", R, N, O];
+export function composition<const R extends Element<any> | string | number, const N extends Composition[2]>(ref: R, name: N): ["composition", R, N];
+export function composition<const R extends Element<any> | string | number, const N extends Composition[2], const O extends Element<any> | undefined>(ref: R, name: N, of: O): O extends undefined ? ["composition", R, N] : ["composition", R, N, O];
 export function composition(ref: Element<any> | string | number, name: Composition[2], of?: Element<any>): Composition<any> {
     const expression = normalizeFactTuples<Composition<any>>(of === undefined ? ["composition", ref, name] : ["composition", ref, name, of]);
     validateComplementUsage(expression);
     return expression;
 }
 
-export function phrase<S extends Element<any> | undefined, N extends Phrase[2], C extends Complements<any>>(subject: S, name: N, ...complements: C): ["phrase", S, N, ...C] {
+export function phrase<const S extends Element<any> | undefined, const N extends Phrase[2], const C extends Complements<any>>(subject: S, name: N, ...complements: C): ["phrase", S, N, ...C] {
     const expression = normalizeFactTuples<["phrase", S, N, ...C]>(["phrase", subject, name, ...complements]);
     validateComplementUsage(expression);
     return expression;
 }
-export function contient<C extends Complements<any> | Variable<any>, E extends Complement<any>>(complements: C, element: E): ["contient", C, E] {
+export function contient<const C extends Complements<any> | Variable<any>, const E extends Complement<any>>(complements: C, element: E): ["contient", C, E] {
     const expression: ["contient", C, E] = ["contient", complements, element];
     validateComplementUsage(expression);
     return expression;
 }
-export function all<const T extends Variables, E extends Expression<any>>(names: T, expression: E): ["all", T, E] {
+// La portée parente sera connue lors de select/query ; ne pas limiter le corps aux seuls noms locaux.
+export function all<const T extends Variables, const E extends Expression<any>>(names: T, expression: E): ["all", T, E] {
     return ["all", names, expression];
 }
-export function exists<const T extends Variables, E extends Expression<any>>(names: T, expression: E): ["exists", T, E] {
+export function exists<const T extends Variables, const E extends Expression<any>>(names: T, expression: E): ["exists", T, E] {
     return ["exists", names, expression];
 }
-export function select<const T extends Variables, const E extends Expression<NoInfer<T>>>(names: T, expression: E): Query<T, E> {
+export function select<const T extends Variables, const E extends Expression<NoInfer<T>>>(names: T, expression: E & VariableScope<NoInfer<T>, NoInfer<E>>): Query<T, E> {
     return ["select", names, expression];
 }
 
